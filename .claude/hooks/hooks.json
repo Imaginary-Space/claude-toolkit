@@ -1,0 +1,28 @@
+{
+  "description": "claude-toolkit safety and session banners (plugin install path)",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(rm *)",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/.claude/hooks/scripts/deny-dangerous.py"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/.claude/hooks/scripts/session-start-banner.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

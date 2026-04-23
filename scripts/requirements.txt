@@ -1,0 +1,2 @@
+# Optional dev dependencies (toolkit validators use the Python 3.11+ stdlib only).
+# Add packages here when scripts need them, e.g. PyYAML>=6.0.1

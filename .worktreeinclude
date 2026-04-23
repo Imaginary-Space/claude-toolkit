@@ -1,0 +1,3 @@
+# One path per line (relative to repo root). Gitignored files listed here are
+# copied into new git worktrees. Uncomment if you maintain local overrides:
+# .claude/settings.local.json

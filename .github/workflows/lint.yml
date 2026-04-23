@@ -1,0 +1,37 @@
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate toolkit metadata
+        run: python scripts/validate.py
+
+      - name: Install shellcheck
+        run: sudo apt-get update -y && sudo apt-get install -y shellcheck
+
+      - name: shellcheck
+        run: |
+          shellcheck setup.sh scripts/*.sh scripts/lib/*.sh .claude/skills/safe-shell/scripts/*.sh .claude/hooks/scripts/*.sh
+
+      - name: markdownlint
+        uses: DavidAnson/markdownlint-cli2-action@v16
+        with:
+          globs: |
+            **/*.md
+            !.git/**

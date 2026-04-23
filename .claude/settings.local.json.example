@@ -1,0 +1,6 @@
+{
+  "$comment": "Copy to .claude/settings.local.json (gitignored) for machine-specific overrides.",
+  "permissions": {
+    "allow": ["Bash(npm *)"]
+  }
+}
