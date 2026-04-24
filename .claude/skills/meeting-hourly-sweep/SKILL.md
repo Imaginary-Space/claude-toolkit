@@ -40,6 +40,16 @@ Optional:
 
 If a required connector is missing, write a `failed` row to `automation_runs` (if Supabase is reachable) with `notes = 'missing required connector: <name>'` and exit.
 
+## Execution discipline (cloud)
+
+Cloud runs hit **per-turn tool limits** if the model batches work. Follow these rules literally:
+
+- **Strictly sequential Read.ai detail:** issue at most **one** `Read:get_meeting_by_id` per round. For each ULID, complete **4a → 4b (in-memory only, using the cached projects snapshot) → 4c → 4d → 4e** before calling `get_meeting_by_id` again. **Never** fire multiple `get_meeting_by_id` calls in parallel.
+- **One projects snapshot:** run the Step 4b SQL **at most once** per run, immediately before the first **Process** meeting (after any process-queue cap). Cache rows in memory for every meeting; **do not** re-query per meeting unless the first query failed.
+- **No task / todo UI:** do not create or update task lists for this routine.
+- **`Read:list_meetings` pagination:** fetch pages **in order** using `cursor` from the previous response only. **Never** request multiple list pages in parallel.
+- **Supabase:** prefer **one** `execute_sql` per logical step (config read, run open, bulk status read, each upsert, run close). Do not split one step across many tiny calls unless required for correctness.
+
 ---
 
 ## Schema reference (inline — do not look this up elsewhere)
@@ -110,7 +120,7 @@ Keys this routine reads:
 | name | text |
 | status | text (`active`, `paused`, `completed`, `cancelled`, `onboarding`) |
 
-Only needed for project_id lookup in Step 3b.
+Only needed for project_id lookup in Step 4b.
 
 ---
 
@@ -131,6 +141,8 @@ Parse into local variables:
 - `enabled` (bool, default `false` if row missing — fail safe)
 - `lookback_hours` (int, default `12`)
 - `skip_titles` (array of strings, default `[]`)
+
+**Semantics:** `enabled: true` means the sweep **runs**. `enabled: false` means **exit** after writing the killed run row below (do not confuse “kill switch on” with “enabled on”).
 
 If `enabled` is `false`:
 
@@ -171,7 +183,7 @@ Read:list_meetings(
 )
 ```
 
-Paginate using `cursor` (set to last meeting's `id` from the previous page) until `has_more = false` OR you've fetched 30 meetings — whichever comes first. If the window has more than 30 meetings, something is wrong upstream; cap the run, set `notes = 'lookback window exceeded cap of 30 — narrow lookback_hours'`, and continue processing what you have.
+Paginate using `cursor` (set to last meeting's `id` from the previous page) until `has_more = false` OR you've fetched 30 meetings — whichever comes first. **Never** request list pages in parallel; each page must wait for the prior response's `cursor`. If the window has more than 30 meetings, something is wrong upstream; cap the run, set `notes = 'lookback window exceeded cap of 30 — narrow lookback_hours'`, and continue processing what you have.
 
 Collect all meeting objects into `candidates` array. Increment `items_checked` by `len(candidates)`.
 
@@ -209,11 +221,17 @@ For each candidate, classify based on current DB state:
 
 Meetings to "Process" move to Step 4. "Skip" meetings are not touched further (`items_checked` already reflects them).
 
+### Process queue cap (tool budget)
+
+If more than **5** meetings are marked **Process**, only the **first 5** in stable `candidates` list order may receive `Read:get_meeting_by_id` and Steps 4a–4e this run. The rest are **deferred** (no Read fetch this run). When closing the run in Step 6, append to `notes` a clear fragment such as `deferred_3_meetings_to_next_run` where the number is how many Process ULIDs were skipped by this cap. The next hourly run will pick them up.
+
 ---
 
 ## Step 4 — For each meeting to process
 
-For each meeting ULID from Step 3 marked **Process**, run Steps 4a–4e below. Wrap each in try/catch — any exception means `items_errored += 1` and push an error object to `error_details`:
+**Hard requirement:** process **Process** ULIDs **one at a time** in stable list order (respecting the cap in “Process queue cap”). At most **one** `Read:get_meeting_by_id` per model turn; finish **4a → 4b → 4c → 4d → 4e** for that ULID before issuing the next Read detail call. Never batch multiple `get_meeting_by_id` calls in parallel.
+
+For each meeting ULID from Step 3 marked **Process** (after applying the cap), run Steps 4a–4e below. Wrap each in try/catch — any exception means `items_errored += 1` and push an error object to `error_details`:
 
 ```json
 {
@@ -226,6 +244,8 @@ For each meeting ULID from Step 3 marked **Process**, run Steps 4a–4e below. W
 ```
 
 ### Step 4a — Fetch full meeting data
+
+Do **not** parallelize this step across meetings: **one** `get_meeting_by_id` invocation, then complete 4b–4e for this ULID before starting the next meeting.
 
 ```text
 Read:get_meeting_by_id(
@@ -255,13 +275,13 @@ If Read.ai returns 404 / Not Found: record an error and continue to next meeting
 
 ### Step 4b — Resolve `project_id` (best-effort, null is fine)
 
-Query:
+Run the query below **once** per run (before the first **Process** meeting after the cap), cache all rows in memory, and reuse for every meeting in Step 4. **Do not** re-run this SQL per meeting unless the first attempt failed.
 
 ```sql
 select id, name from projects where status in ('active', 'onboarding', 'paused');
 ```
 
-For each project row, check if the meeting `title` contains the project `name` (case-insensitive). Match rules:
+For each cached project row, check if the meeting `title` contains the project `name` (case-insensitive). Match rules:
 
 - Zero matches → `project_id = null`
 - Exactly one match → use that `id`
@@ -483,6 +503,8 @@ group by 1 order by 1 desc;
 ## Definition of done
 
 - [ ] Config read from `system_config`; kill switch respected with a `killed` run row if disabled.
+- [ ] **Execution discipline:** no parallel `get_meeting_by_id`; list pages sequential; projects SQL at most once; no task/todo UI.
+- [ ] If more than 5 **Process** meetings, cap applied and `notes` includes `deferred_N_meetings_to_next_run` when `N > 0`.
 - [ ] Read.ai list + detail calls used with `expand` including `metrics` on list and full detail on get.
 - [ ] Upsert applied only for non-terminal rows; counters and `automation_runs` final status match Step 5 logic.
 - [ ] Slack alert sent only on `failed` (not `partial_success`), when Slack tools exist.
