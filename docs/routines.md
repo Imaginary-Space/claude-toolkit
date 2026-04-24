@@ -11,9 +11,9 @@ This repo is what the routine **clones and loads** on every run.
 Each cloud routine run:
 
 1. **Clones** the selected repo on its default branch (stateless; no memory from prior runs).
-2. Runs the routine **environment setup** once per cached environment (typically `./setup.sh` here).
+2. Applies your selected **cloud environment** snapshot (network, env vars, and that environment’s **setup script** — see below).
 3. Starts a full **Claude Code** session with the **UI prompt** plus any **connectors** you attached.
-4. **Discovers** committed project config: [`CLAUDE.md`](../CLAUDE.md), [`.claude/skills/`](../.claude/skills/), [`.claude/agents/`](../.claude/agents/), [`.claude/rules/`](../.claude/rules/), [`.claude/output-styles/`](../.claude/output-styles/), and [`.claude/settings.json`](../.claude/settings.json).
+4. **Discovers** committed project config: [`CLAUDE.md`](../CLAUDE.md), [`.claude/skills/`](../.claude/skills/), [`.claude/agents/`](../.claude/agents/), [`.claude/rules/`](../.claude/rules/), [`.claude/output-styles/`](../.claude/output-styles/), and [`.claude/settings.json`](../.claude/settings.json). A **SessionStart** hook in this repo runs [`setup.sh`](../setup.sh) when `CLAUDE_CODE_REMOTE=true` so tooling runs **from the clone** (not from the cloud-environment script, which may not have the repo as the current directory).
 
 So the durable surface for a routine is: **`setup.sh`**, **`.claude/**`**, and **`scripts/**`**. Put workflows in **skills** and thin **shell helpers**; keep the saved UI prompt short.
 
@@ -28,15 +28,17 @@ The prompt in the Claude UI should:
 
 Heavy instructions, slide structure, and data contracts belong in **git** (skills + docs), not duplicated in long UI prompts.
 
-## Environment setup
+## Environment setup (two different places)
 
-Set the routine’s **environment setup** to:
+### Cloud environment (Default) — **do not** use `./setup.sh` here
 
-```text
-./setup.sh
-```
+The **Update cloud environment** dialog runs its setup script **before** Claude Code starts, and it is **not** tied to your repository’s working directory. A line like `./setup.sh` fails with **exit code 127** (“No such file or directory”) because `setup.sh` from your clone is not available on `$PWD` at that stage.
 
-[`setup.sh`](../setup.sh) makes helper scripts executable, runs `scripts/validate.py` when Python is available, and warms installs (e.g. Marp CLI) so the cloud **environment cache** can reuse them. Keep `setup.sh` **idempotent** and fast.
+Use that field only for **global** prep (extra apt packages, image-wide tools). Leave it empty or minimal if you do not need that. Official guidance: [Setup scripts vs SessionStart hooks](https://code.claude.com/docs/en/claude-code-on-the-web#setup-scripts-vs-sessionstart-hooks) — project-level install belongs in the **repo**, not the cloud-environment box.
+
+### This repository — `setup.sh` via SessionStart (already wired)
+
+[`setup.sh`](../setup.sh) makes helper scripts executable, runs `scripts/validate.py` when Python is available, and warms installs (e.g. Marp CLI). In cloud sessions it is invoked from [`.claude/hooks/scripts/run-remote-setup.sh`](../.claude/hooks/scripts/run-remote-setup.sh) on **SessionStart** when `CLAUDE_CODE_REMOTE=true`, so paths resolve to **`$CLAUDE_PROJECT_DIR`**. Keep `setup.sh` **idempotent** and fast.
 
 ## Branch pushes
 

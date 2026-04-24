@@ -8,7 +8,7 @@ Shared **Claude Code** configuration for imaginary-space: skills, subagents, rul
 
 1. Create a routine at [claude.ai/code/routines](https://claude.ai/code/routines).
 2. Select this repository (`imaginary-space/claude-toolkit`) and the default branch (`main`).
-3. Point the routine’s **environment setup** at `./setup.sh` (runs once per cloud session before the agent starts; results are cached per environment).
+3. Leave the **cloud environment** setup script empty (or use only global installs like `apt`). Do **not** put `./setup.sh` there — that dialog runs before your repo is the shell’s cwd and fails with exit 127. After clone, **`setup.sh`** runs from a **SessionStart** hook when `CLAUDE_CODE_REMOTE=true` (see [`docs/routines.md`](docs/routines.md)).
 4. Write a **short, self-contained prompt** in the UI that names the skill or script to run (e.g. invoke the `weekly-sync-deck` skill for the weekly PDF deck—see [`docs/presentations.md`](docs/presentations.md)) and attach only the **connectors** you need (Linear, Supabase, Google Drive, etc.).
 5. In the routine repo settings, enable **Allow unrestricted branch pushes** if agents should push outside `claude/*` (this org chose unrestricted pushes; still prefer `claude/<slug>` branches for PRs—see [`CLAUDE.md`](CLAUDE.md)).
 

@@ -5,7 +5,7 @@
 - **Markdown source** — easy for humans and agents to edit, diff, and review in git.
 - **One command to PDF** — `@marp-team/marp-cli` renders PDF (and optionally PPTX/HTML) with sensible defaults; PDF supports **outlines** and **presenter notes** for live reads.
 - **Theming** — CSS-based themes (see `.claude/skills/weekly-sync-deck/templates/theme.css`) keep decks on-brand without proprietary slide builders.
-- **Fits cloud routines** — install is cacheable via `./setup.sh` (`npx @marp-team/marp-cli`); no OAuth required for **rendering** (upload is separate via the Google Drive connector).
+- **Fits cloud routines** — Marp is warmed via [`setup.sh`](../setup.sh) (called from a **SessionStart** hook in cloud — see [`docs/routines.md`](routines.md)); no OAuth required for **rendering** (upload is separate via the Google Drive connector).
 
 CLI examples (from repo root):
 

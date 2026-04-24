@@ -6,7 +6,7 @@ This repository is the **shared Claude Code surface** for imaginary-space: skill
 
 Routine **prompts** and triggers live in the [Claude Routines UI](https://claude.ai/code/routines), not in this repo. Each run is **stateless**: a fresh clone of the default branch (`main`). Nothing persists between runs unless you push commits or open PRs.
 
-- Run **`./setup.sh`** from the routine’s environment setup so scripts are executable, validators run, and tools like Marp are warmed for the environment cache.
+- **Do not** put `./setup.sh` in the **cloud environment** setup script (that runs before the repo is on `PATH`/`PWD` — use empty or global tools only). Repo setup runs in cloud via **SessionStart** → [`run-remote-setup.sh`](.claude/hooks/scripts/run-remote-setup.sh) → [`setup.sh`](setup.sh) when `CLAUDE_CODE_REMOTE=true`.
 - **Discovery**: Claude Code loads `.claude/skills/`, `.claude/agents/`, `.claude/rules/`, `.claude/output-styles/`, and project [`settings.json`](.claude/settings.json) from this repo when it is the selected repository.
 - **Thin UI prompts**: name skills/scripts and connectors in the saved prompt; keep heavy instructions in git (see [`docs/routines.md`](docs/routines.md)).
 - **Branching**: Prefer `claude/<short-slug>` for agent work branches and PRs even when unrestricted pushes are enabled—keeps history readable.
