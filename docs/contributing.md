@@ -14,7 +14,7 @@ python3 scripts/validate.py
 
 ## Pull requests
 
-- Use the **`pr-workflow`** skill conventions (`claude/<slug>` branches, clear commits).
+- Use the `**pr-workflow**` skill conventions (`claude/<slug>` branches, clear commits).
 - Keep changes scoped; this repository is meant to be low-churn and high-trust.
 
 ## Adding a skill
@@ -29,3 +29,4 @@ python3 scripts/validate.py
 
 - Never commit tokens or private keys.
 - If a hook or script could block legitimate workflows, document the escape hatch in `CLAUDE.md` and the skill that owns the behavior.
+

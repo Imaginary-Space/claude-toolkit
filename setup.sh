@@ -23,4 +23,9 @@ else
   echo "[claude-toolkit] python3 not found; skipping validate.py" >&2
 fi
 
+# Warm Marp CLI for cloud routine environments (cached after first successful install).
+if command -v npx >/dev/null 2>&1; then
+  npx --yes @marp-team/marp-cli@^4 --version >/dev/null 2>&1 || true
+fi
+
 echo "[claude-toolkit] setup complete."

@@ -1,6 +1,6 @@
 # claude-toolkit
 
-Shared **Claude Code** configuration for imaginary-space: skills, subagents, rules, hooks, routine prompt templates, and small scripts. Designed so [Claude Code Routines](https://code.claude.com/docs/en/routines) can point at this repository and get a consistent agent surface on every run.
+Shared **Claude Code** configuration for imaginary-space: skills, subagents, rules, hooks, and small scripts. Designed so [Claude Code Routines](https://code.claude.com/docs/en/routines) can clone this repository and get a consistent agent surface on every run.
 
 ## Quick start
 
@@ -8,9 +8,11 @@ Shared **Claude Code** configuration for imaginary-space: skills, subagents, rul
 
 1. Create a routine at [claude.ai/code/routines](https://claude.ai/code/routines).
 2. Select this repository (`imaginary-space/claude-toolkit`) and the default branch (`main`).
-3. Point the routine’s **environment setup** at `./setup.sh` (runs once per cloud session before the agent starts).
-4. Paste a prompt from [`routines/`](routines/) (or write your own; keep it self-contained—routines are stateless).
+3. Point the routine’s **environment setup** at `./setup.sh` (runs once per cloud session before the agent starts; results are cached per environment).
+4. Write a **short, self-contained prompt** in the UI that names the skill or script to run (e.g. invoke the `weekly-sync-deck` skill for the weekly PDF deck—see [`docs/presentations.md`](docs/presentations.md)) and attach only the **connectors** you need (Linear, Supabase, Google Drive, etc.).
 5. In the routine repo settings, enable **Allow unrestricted branch pushes** if agents should push outside `claude/*` (this org chose unrestricted pushes; still prefer `claude/<slug>` branches for PRs—see [`CLAUDE.md`](CLAUDE.md)).
+
+See [`docs/routines.md`](docs/routines.md) for how prompts in the UI map to this repo.
 
 ### As a plugin in another repo
 
@@ -33,8 +35,7 @@ Use `./scripts/install.sh --dry-run /path/to/other-repo` to preview.
 | [`.claude/agents/`](.claude/agents/) | Subagent definitions |
 | [`.claude/rules/`](.claude/rules/) | Scoped rules |
 | [`.claude/hooks/`](.claude/hooks/) | Hook scripts + [`hooks.json`](.claude/hooks/hooks.json) for plugin installs |
-| [`routines/`](routines/) | Source-of-truth routine prompts to paste into the web UI |
-| [`scripts/`](scripts/) | Validators and installers |
+| [`scripts/`](scripts/) | Validators, installers, and helpers (e.g. `build-deck.sh`) |
 
 ## Prerequisites
 

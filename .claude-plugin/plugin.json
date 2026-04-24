@@ -1,7 +1,7 @@
 {
   "name": "claude-toolkit",
   "version": "0.1.0",
-  "description": "Skills, subagents, rules, hooks, and routine templates for imaginary-space Claude Code agents.",
+  "description": "Skills, subagents, rules, hooks, and scripts for imaginary-space Claude Code agents.",
   "skills": "./.claude/skills",
   "agents": "./.claude/agents",
   "commands": "./.claude/skills",

@@ -1,12 +1,14 @@
 # claude-toolkit
 
-This repository is the **shared Claude Code surface** for imaginary-space: skills, subagents, rules, hooks, and routine prompt templates. Agents (including cloud **Routines**) should treat it as the system-of-record for how we work.
+This repository is the **shared Claude Code surface** for imaginary-space: skills, subagents, rules, hooks, and small scripts. Agents (including cloud **Routines**) should treat it as the system-of-record for how we work.
 
-## Routine contract
+## Cloud routines
 
-- Each routine run is **stateless**: a fresh clone of the default branch (`main`). Nothing persists between runs unless you push commits or open PRs.
-- Run **`./setup.sh`** from the routine’s environment setup so scripts are executable and sanity checks pass.
+Routine **prompts** and triggers live in the [Claude Routines UI](https://claude.ai/code/routines), not in this repo. Each run is **stateless**: a fresh clone of the default branch (`main`). Nothing persists between runs unless you push commits or open PRs.
+
+- Run **`./setup.sh`** from the routine’s environment setup so scripts are executable, validators run, and tools like Marp are warmed for the environment cache.
 - **Discovery**: Claude Code loads `.claude/skills/`, `.claude/agents/`, `.claude/rules/`, `.claude/output-styles/`, and project [`settings.json`](.claude/settings.json) from this repo when it is the selected repository.
+- **Thin UI prompts**: name skills/scripts and connectors in the saved prompt; keep heavy instructions in git (see [`docs/routines.md`](docs/routines.md)).
 - **Branching**: Prefer `claude/<short-slug>` for agent work branches and PRs even when unrestricted pushes are enabled—keeps history readable.
 - **Safety**: Routines do not show permission prompts. `permissions.deny` in settings is a soft guard; **hooks** (see `.claude/settings.json`) enforce destructive-command blocks.
 
@@ -17,7 +19,8 @@ This repository is the **shared Claude Code surface** for imaginary-space: skill
 | `pr-workflow` | Branching, commits, PRs, lightweight triage |
 | `safe-shell` | Before running shell that could be destructive |
 | `skill-author` | Adding or editing a skill in this repo |
-| `routine-author` | Adding a routine prompt under `routines/` |
+| `weekly-sync-deck` | Weekly client/management deck from Linear + Supabase → Marp PDF → Drive |
+| `meeting-hourly-sweep` | Hourly Read.ai → Supabase meeting queue sweep (standalone routine) |
 | `repo-bootstrap` | Installing this toolkit into another repository |
 
 ## Subagents (seed)
@@ -28,12 +31,10 @@ This repository is the **shared Claude Code surface** for imaginary-space: skill
 | `test-runner` | Run tests and report failures crisply |
 | `pr-babysitter` | Keep a PR merge-ready (comments, CI, conflicts) |
 
-## Routine templates
-
-Authoritative copy-paste prompts live under [`routines/`](routines/). Read [`docs/routines.md`](docs/routines.md) before editing.
-
 ## Further reading
 
+- [`docs/routines.md`](docs/routines.md) — how cloud routines use this repo
+- [`docs/presentations.md`](docs/presentations.md) — Marp decks and weekly sync format
 - [`docs/architecture.md`](docs/architecture.md) — hybrid project + plugin layout
 - [`docs/conventions.md`](docs/conventions.md) — naming, frontmatter, size limits
 - [`docs/contributing.md`](docs/contributing.md) — PR flow and validation

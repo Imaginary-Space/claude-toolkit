@@ -2,8 +2,8 @@
 
 ## Skills (`.claude/skills/<name>/SKILL.md`)
 
-- **`name`**: lowercase `kebab-case`, max **64** characters.
-- **`description`**: max **1024** characters; **third person**; include **what** + **when** (trigger terms).
+- `**name**`: lowercase `kebab-case`, max **64** characters.
+- `**description`**: max **1024** characters; **third person**; include **what** + **when** (trigger terms).
 - **Body**: aim under **500 lines**; use sibling files for deep reference (link **one level** from `SKILL.md`).
 
 ## Subagents (`.claude/agents/<name>.md`)
@@ -15,10 +15,11 @@
 
 - Short, topic-scoped guidance; prefer bullets over prose.
 
-## Routine templates (`routines/*.md`)
+## Cloud routines (UI prompt + this repo)
 
-- Must remain **self-contained**; never assume prior chat context.
-- Prefer delegating durable logic to skills; keep the routine prompt as orchestration.
+- Routine **prompts** live in the Claude web UI, not in this repository. See [`docs/routines.md`](routines.md).
+- Skills and scripts here should be **self-contained** so a stateless cloud run succeeds without prior chat context.
+- Prefer **skills** for durable workflow; keep the saved UI prompt thin (name the skill, connectors, and done criteria).
 
 ## Scripts
 
