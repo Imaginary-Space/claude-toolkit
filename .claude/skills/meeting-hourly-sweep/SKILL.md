@@ -17,6 +17,8 @@ This skill is the complete instruction set for a scheduled, unattended run. Ever
 
 **What this routine does in one sentence:** pulls Read.ai meetings from the last N hours, saves each to Supabase with link-back fields, sets a queue state (`pending` / `skipped_*` / `awaiting_readai`), and logs the run. Nothing else.
 
+**Transcript is the source of truth — always.** Read.ai's auto-extracted `action_items` are noisy and frequently wrong (missing items, hallucinated items, missing owners). They are treated as a **hint only**. On every meeting this routine expands the full `transcript` and the agent reads it end-to-end to extract its own list of explicit, owner-attributed commitments. That agent-derived list — not Read.ai's — is what gets written to `action_items` and what drives the triage decision. This is non-optional and applies to every meeting, every run.
+
 **What this routine explicitly does NOT do:** no Linear writes, no Slack writes (except a single failure alert), no client-facing DB writes, no deletes, no updates to meetings already in a terminal state.
 
 ## Context (read once — minimal by design)
@@ -44,7 +46,8 @@ If a required connector is missing, write a `failed` row to `automation_runs` (i
 
 Cloud runs hit **per-turn tool limits** if the model batches work. Follow these rules literally:
 
-- **Strictly sequential Read.ai detail:** issue at most **one** `Read:get_meeting_by_id` per round. For each ULID, complete **4a → 4b (in-memory only, using the cached projects snapshot) → 4c → 4d → 4e** before calling `get_meeting_by_id` again. **Never** fire multiple `get_meeting_by_id` calls in parallel.
+- **Strictly sequential Read.ai detail:** issue at most **one** `Read:get_meeting_by_id` per round. For each ULID, complete **4a → 4a.1 (transcript read, in-model, no tool calls) → 4b (in-memory only, using the cached projects snapshot) → 4c → 4d → 4e** before calling `get_meeting_by_id` again. **Never** fire multiple `get_meeting_by_id` calls in parallel.
+- **Transcript reading is in-model:** Step 4a.1 happens inside the same turn as 4a's response — no extra tool calls, no re-fetching. The agent reads the `transcript` field that came back in 4a.
 - **One projects snapshot:** run the Step 4b SQL **at most once** per run, immediately before the first **Process** meeting (after any process-queue cap). Cache rows in memory for every meeting; **do not** re-query per meeting unless the first query failed.
 - **No task / todo UI:** do not create or update task lists for this routine.
 - **`Read:list_meetings` pagination:** fetch pages **in order** using `cursor` from the previous response only. **Never** request multiple list pages in parallel.
@@ -229,15 +232,15 @@ If more than **5** meetings are marked **Process**, only the **first 5** in stab
 
 ## Step 4 — For each meeting to process
 
-**Hard requirement:** process **Process** ULIDs **one at a time** in stable list order (respecting the cap in “Process queue cap”). At most **one** `Read:get_meeting_by_id` per model turn; finish **4a → 4b → 4c → 4d → 4e** for that ULID before issuing the next Read detail call. Never batch multiple `get_meeting_by_id` calls in parallel.
+**Hard requirement:** process **Process** ULIDs **one at a time** in stable list order (respecting the cap in “Process queue cap”). At most **one** `Read:get_meeting_by_id` per model turn; finish **4a → 4a.1 → 4b → 4c → 4d → 4e** for that ULID before issuing the next Read detail call. Never batch multiple `get_meeting_by_id` calls in parallel.
 
-For each meeting ULID from Step 3 marked **Process** (after applying the cap), run Steps 4a–4e below. Wrap each in try/catch — any exception means `items_errored += 1` and push an error object to `error_details`:
+For each meeting ULID from Step 3 marked **Process** (after applying the cap), run Steps 4a–4e below. Wrap each in try/catch — any exception means `items_errored += 1` and push an error object to `error_details`. For Step 4a.1, an exception is anything that prevents producing a valid `action_items` list (malformed transcript, model refusal, etc.) — set `error_type = "transcript_extract"` and skip the upsert for that meeting:
 
 ```json
 {
   "read_ai_id": "<ULID>",
   "title": "<title>",
-  "error_type": "<fetch|triage|upsert|project_lookup>",
+  "error_type": "<fetch|transcript_extract|triage|upsert|project_lookup>",
   "error_message": "<message>",
   "step": "<which Step 4x>"
 }
@@ -250,9 +253,11 @@ Do **not** parallelize this step across meetings: **one** `get_meeting_by_id` in
 ```text
 Read:get_meeting_by_id(
   id = "<ULID>",
-  expand = ["summary", "action_items", "metrics", "key_questions"]
+  expand = ["summary", "action_items", "metrics", "key_questions", "transcript"]
 )
 ```
+
+`transcript` is **required**, not optional. If Read.ai omits it from the response (rare — usually means the transcript hasn't finished generating), treat the same as missing metrics → fall through to the `awaiting_readai` rule in Step 4c.
 
 Extract:
 
@@ -266,12 +271,57 @@ Extract:
 - `meeting_date` = date portion of `start_time` converted to `America/Argentina/Buenos_Aires`
 - `attendees` = `[p.name for p in response.participants if p.attended and p.name is not None]`
 - `summary` = response.summary (may be null)
-- `action_items` = response.action_items (list of objects, each with `action`, `owner`, `due`; may be empty list or null)
+- `readai_action_items` = response.action_items (list, possibly null/empty — **hint only, do not write directly to DB**)
+- `transcript` = response.transcript (list of utterances, each typically `{speaker, text, start_time_ms}` — full meeting transcript)
 - `read_ai_score` = response.metrics?.read_score (may be null if still processing)
 - `sentiment` = response.metrics?.sentiment
 - `engagement` = response.metrics?.engagement
 
 If Read.ai returns 404 / Not Found: record an error and continue to next meeting. Don't write anything.
+
+### Step 4a.1 — Read the transcript and extract `action_items` (mandatory)
+
+This step runs on **every** meeting, regardless of what `readai_action_items` contains. The agent reads the full `transcript` end-to-end and produces its own list of action items. The output of this step is what gets written to the DB column `action_items` in Step 4d.
+
+**What counts as an action item:**
+
+- An explicit commitment by a named person to do a specific thing.
+- Verb + object (`"send the design doc"`, `"file the bug"`, `"draft the SOW"`), not vague intent (`"we should think about it"`, `"that sounds good"`).
+- Owner is identifiable from the transcript — either the speaker who said `"I'll do X"` / `"I can do X"` / `"let me do X"`, or a person explicitly named (`"Maria, can you handle X?" → "yes"` → owner = Maria).
+- Decisions that imply work (`"we'll go with option B"` → only an action item if a person also commits to executing it).
+
+**What does NOT count:**
+
+- Hypotheticals (`"we could maybe…"`, `"if X happens, then…"`).
+- Aspirations without an owner (`"someone should look at that"`).
+- Things already done (`"I sent it yesterday"`).
+- Read.ai-hallucinated items not actually present in the transcript — drop them silently.
+
+**How to use `readai_action_items`:** treat it as a hint. Cross-check each entry against the transcript. Keep entries that are real, fix or discard entries that aren't, and add anything Read.ai missed. Never copy `readai_action_items` to the DB unmodified.
+
+**Output shape** (this is what goes into the `action_items` jsonb column):
+
+```json
+[
+  {
+    "action": "send updated SOW to Acme by EOD Friday",
+    "owner": "Harry",
+    "due": "2026-05-01",
+    "source": "transcript",
+    "evidence": "I'll get the SOW over to them by Friday."
+  }
+]
+```
+
+Field rules:
+
+- `action` — short imperative phrase, required.
+- `owner` — name as it appears in `attendees` when possible; null only if truly unattributed (rare — see triage rules).
+- `due` — ISO date if explicitly stated in transcript, else null. Don't guess.
+- `source` — always `"transcript"` for items the agent extracted; if you keep a Read.ai entry verbatim because it's accurate, use `"readai_confirmed"`.
+- `evidence` — short verbatim quote (≤ ~140 chars) from the transcript that supports the item. Required. This is what reviewers use to audit the agent's extraction.
+
+If the transcript contains zero qualifying action items, emit `[]` (empty list) — not null.
 
 ### Step 4b — Resolve `project_id` (best-effort, null is fine)
 
@@ -299,17 +349,21 @@ Do not attempt fuzzy matching or guessing beyond substring containment. Null is 
 
 ### Step 4c — Triage → determine `processing_status`
 
+Note: by this point `action_items` refers to the **agent-extracted** list from Step 4a.1, not Read.ai's raw output.
+
 Apply rules in order — first match wins:
 
 | Rule | Status | `processing_notes` |
 | --- | --- | --- |
 | `title` matches `skip_titles` from Step 0 (case-insensitive exact match OR meeting title starts with a skip title as prefix, e.g. "IMS Sync" matches "IMS Sync x Retro") | `skipped_internal` | `"internal meeting — skipped by config"` |
-| `metrics` is null (i.e. `read_ai_score`, `sentiment`, `engagement` all null) | `awaiting_readai` | `"Read.ai processing incomplete at " + now()` |
-| `action_items` is null or empty array | `skipped_no_actions` | `"no action items in transcript"` |
-| `action_items` exists but every entry has null/empty `owner` | `skipped_no_actions` | `"action items present but none attributed"` |
-| Otherwise | `pending` | `"ready for review"` + (append `" \| unlinked meeting"` if `project_id` is null) |
+| `metrics` is null (i.e. `read_ai_score`, `sentiment`, `engagement` all null) **or** `transcript` was missing/empty in Step 4a | `awaiting_readai` | `"Read.ai processing incomplete at " + now()` |
+| Agent-extracted `action_items` is empty (`[]`) after reading the full transcript | `skipped_no_actions` | `"transcript reviewed — no explicit owner-attributed commitments"` |
+| Every entry in agent-extracted `action_items` has null `owner` | `skipped_no_actions` | `"transcript reviewed — commitments present but no owner attributable"` |
+| Otherwise | `pending` | `"ready for review"` + (append `" \| unlinked meeting"` if `project_id` is null) + (append `" \| readai_action_items_diverged"` if Read.ai's hint list differed materially from the agent-extracted list — i.e. items added or removed beyond minor wording) |
 
 ### Step 4d — Upsert (with terminal-state guard)
+
+`$6` (the `action_items` parameter below) **must** be the agent-extracted list from Step 4a.1 (jsonb-encoded), never `readai_action_items`. Use `'[]'::jsonb` for empty.
 
 ```sql
 insert into meetings (
@@ -498,6 +552,8 @@ group by 1 order by 1 desc;
 - **Never** set `processing_status = 'processed'`. That's a human/review-skill decision only.
 - **Never** guess a `project_id`. Null is valid and correct for internal/sales/prospect calls.
 - **Always** expand `metrics` on every Read.ai call. This is the fix for the prior 60% coverage problem.
+- **Always** expand `transcript` on every `get_meeting_by_id` call and read it end-to-end before triage. Read.ai's `action_items` is a hint, not a source of truth — never trust it without verifying against the transcript.
+- **Always** write the agent-extracted `action_items` (with `source` and `evidence` per item) to the DB. Never write `readai_action_items` straight through.
 - **Always** write an `automation_runs` row — even on kill-switch exit. Silent runs are unobservable runs.
 
 ## Definition of done
@@ -505,7 +561,8 @@ group by 1 order by 1 desc;
 - [ ] Config read from `system_config`; kill switch respected with a `killed` run row if disabled.
 - [ ] **Execution discipline:** no parallel `get_meeting_by_id`; list pages sequential; projects SQL at most once; no task/todo UI.
 - [ ] If more than 5 **Process** meetings, cap applied and `notes` includes `deferred_N_meetings_to_next_run` when `N > 0`.
-- [ ] Read.ai list + detail calls used with `expand` including `metrics` on list and full detail on get.
+- [ ] Read.ai list + detail calls used with `expand` including `metrics` on list and `transcript` + full detail on get.
+- [ ] For every processed meeting, the agent read the full transcript and emitted its own `action_items` (with `source` + `evidence` per item) — Read.ai's `action_items` was not written to the DB unmodified.
 - [ ] Upsert applied only for non-terminal rows; counters and `automation_runs` final status match Step 5 logic.
 - [ ] Slack alert sent only on `failed` (not `partial_success`), when Slack tools exist.
 - [ ] Final stdout matches Step 8 format for scheduled runs.
