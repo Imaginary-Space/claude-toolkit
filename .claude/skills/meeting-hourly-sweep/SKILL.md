@@ -48,7 +48,7 @@ Cloud runs hit **per-turn tool limits** if the model batches work. Follow these 
 
 - **Strictly sequential Read.ai detail:** issue at most **one** `Read:get_meeting_by_id` per round. For each ULID, complete **4a → 4a.1 (transcript read, in-model, no tool calls) → 4b (in-memory only, using the cached projects snapshot) → 4c → 4d → 4e** before calling `get_meeting_by_id` again. **Never** fire multiple `get_meeting_by_id` calls in parallel.
 - **Transcript reading is in-model:** Step 4a.1 happens inside the same turn as 4a's response — no extra tool calls, no re-fetching. The agent reads the `transcript` field that came back in 4a.
-- **One projects snapshot:** run the Step 4b SQL **at most once** per run, immediately before the first **Process** meeting (after any process-queue cap). Cache rows in memory for every meeting; **do not** re-query per meeting unless the first query failed.
+- **One projects + clients snapshot:** run the Step 4b SQL (one combined call returning both projects-with-client-id and clients) **at most once** per run, immediately before the first **Process** meeting (after any process-queue cap). Cache rows in memory for every meeting; **do not** re-query per meeting unless the first query failed.
 - **No task / todo UI:** do not create or update task lists for this routine.
 - **`Read:list_meetings` pagination:** fetch pages **in order** using `cursor` from the previous response only. **Never** request multiple list pages in parallel.
 - **Supabase:** prefer **one** `execute_sql` per logical step (config read, run open, bulk status read, each upsert, run close). Do not split one step across many tiny calls unless required for correctness.
@@ -122,8 +122,30 @@ Keys this routine reads:
 | id | uuid, PK |
 | name | text |
 | status | text (`active`, `paused`, `completed`, `cancelled`, `onboarding`) |
+| client_id | uuid, FK → clients.id, nullable |
 
 Only needed for project_id lookup in Step 4b.
+
+### `clients` table (read-only for this routine)
+
+| Column | Type |
+| --- | --- |
+| id | uuid, PK |
+| name | text |
+| status | text (`active`, `prospect`, `paused`, `churned`) |
+| primary_domain | text, nullable (e.g. `acme.com`) |
+
+Used for two things:
+
+1. Improving project matching in titles like `"Acme call"` (no project name in title, but client `Acme` has exactly one active project).
+2. Detecting client-only meetings (sales / onboarding / prospect calls where no project exists yet) so they aren't silently dropped.
+
+If the actual column names differ (e.g. `domain` instead of `primary_domain`, or no domain column at all), the agent should run this once at the top of Step 4b and adapt:
+
+```sql
+select column_name from information_schema.columns
+where table_schema = 'public' and table_name = 'clients';
+```
 
 ---
 
@@ -270,6 +292,7 @@ Extract:
 - `end_time` = ISO from `response.end_time_ms`
 - `meeting_date` = date portion of `start_time` converted to `America/Argentina/Buenos_Aires`
 - `attendees` = `[p.name for p in response.participants if p.attended and p.name is not None]`
+- `attendee_emails` = `[p.email for p in response.participants if p.attended and p.email is not None]` (used by Step 4b's domain matcher; not written to DB on its own)
 - `summary` = response.summary (may be null)
 - `readai_action_items` = response.action_items (list, possibly null/empty — **hint only, do not write directly to DB**)
 - `transcript` = response.transcript (list of utterances, each typically `{speaker, text, start_time_ms}` — full meeting transcript)
@@ -323,29 +346,45 @@ Field rules:
 
 If the transcript contains zero qualifying action items, emit `[]` (empty list) — not null.
 
-### Step 4b — Resolve `project_id` (best-effort, null is fine)
+### Step 4b — Resolve `project_id` using projects + clients (best-effort, null is fine)
 
-Run the query below **once** per run (before the first **Process** meeting after the cap), cache all rows in memory, and reuse for every meeting in Step 4. **Do not** re-run this SQL per meeting unless the first attempt failed.
+Run the queries below **once** per run (before the first **Process** meeting after the cap), cache all rows in memory, and reuse for every meeting in Step 4. **Do not** re-run this SQL per meeting unless the first attempt failed.
 
 ```sql
-select id, name from projects where status in ('active', 'onboarding', 'paused');
+select id, name, status, client_id
+from projects
+where status in ('active', 'onboarding', 'paused');
+
+select id, name, status, primary_domain
+from clients
+where status in ('active', 'prospect', 'onboarding');
 ```
 
-For each cached project row, check if the meeting `title` contains the project `name` (case-insensitive). Match rules:
+(If the `clients` schema differs, run the `information_schema` probe from the schema reference first, then adapt column names.)
 
-- Zero matches → `project_id = null`
-- Exactly one match → use that `id`
-- Multiple matches → pick the longest-name match (more specific), set `processing_notes` to include a note like `ambiguous project match — picked {chosen_project_name}`
+Cache as `projects_snapshot` and `clients_snapshot`. Build an in-memory index `client_id → [project, …]` from `projects_snapshot.client_id` for the inference step below.
 
-Title conventions that commonly match:
+#### Matching algorithm (apply in order, first hit wins)
 
-- `[Project] Tech Sync`
-- `[Project] Sprint Review` / `Sprint Planning`
-- `Dev Sync - [Project]`
-- `Check-in Call: [Project]`
-- `Project Kickoff: [Project]`
+1. **Project name in title** — for each cached project, check if `title` contains `project.name` (case-insensitive, word-boundary preferred — don't match `"Acme"` inside `"Academy"`).
+   - Zero hits → fall to step 2.
+   - Exactly one hit → `project_id = that.id`. Done.
+   - Multiple hits → pick the **longest** project name (most specific). Append to `processing_notes`: `ambiguous project match — picked {name}`. Done.
 
-Do not attempt fuzzy matching or guessing beyond substring containment. Null is a valid, correct outcome.
+2. **Client name in title → infer project** — for each cached client, check if `title` contains `client.name` (case-insensitive, word-boundary).
+   - Zero hits → fall to step 3.
+   - One client matched **and** that client has exactly one active project in `projects_snapshot` → `project_id = that project.id`. Append to `processing_notes`: `inferred project from client {client.name}`. Done.
+   - One client matched but that client has 0 or >1 active projects → `project_id = null`, append `client_match: {client.name} — no unique active project`. Continue to step 3 (don't return).
+   - Multiple clients matched → `project_id = null`, append `ambiguous client match: {names}`. Continue to step 3.
+
+3. **Attendee email domain → infer client → infer project** — extract domains from `owner_email` and (if available in the meeting payload) attendee emails. Skip common provider domains (`gmail.com`, `outlook.com`, `hotmail.com`, `yahoo.com`, `icloud.com`, `proton.me`, and the team's own domain `imaginaryspace.ai`). For each remaining domain, look up clients where `primary_domain` matches (or skip this whole step if `primary_domain` column is absent).
+   - One client matched with exactly one active project → use that project_id, append `processing_notes`: `inferred project from attendee domain ({domain} → {client.name})`. Done.
+   - One client matched but no unique project → `project_id = null`, append `client_match (domain): {client.name}`.
+   - Otherwise → `project_id = null` (no extra note).
+
+4. **No matches** — `project_id = null`. Title-based examples that commonly match step 1: `[Project] Tech Sync`, `[Project] Sprint Review`, `Dev Sync - [Project]`, `Check-in Call: [Project]`, `Project Kickoff: [Project]`.
+
+Do not attempt fuzzy matching, edit-distance, or guessing beyond the rules above. Null `project_id` is valid and correct (sales calls, prospect intros, internal-but-not-skipped calls). When a client matched but no project did, the `client_match` / `client_match (domain)` note in `processing_notes` is the signal a human reviewer uses to decide what to do.
 
 ### Step 4c — Triage → determine `processing_status`
 
@@ -550,7 +589,7 @@ group by 1 order by 1 desc;
 - **Never** write to `imdcpjjnydbhbixyhulj` (spaceship-control / client-facing DB). Only `jcuymodyrjbzwmyjzwee` (ops).
 - **Never** delete or update meeting rows in terminal state (`processed`, `pending`, `skipped_*`). The `WHERE` guard on the upsert enforces this; don't bypass it.
 - **Never** set `processing_status = 'processed'`. That's a human/review-skill decision only.
-- **Never** guess a `project_id`. Null is valid and correct for internal/sales/prospect calls.
+- **Never** guess a `project_id`. Null is valid and correct for internal/sales/prospect calls. Inference via client + attendee-domain (Step 4b) is allowed only when the rules give a deterministic single-project answer.
 - **Always** expand `metrics` on every Read.ai call. This is the fix for the prior 60% coverage problem.
 - **Always** expand `transcript` on every `get_meeting_by_id` call and read it end-to-end before triage. Read.ai's `action_items` is a hint, not a source of truth — never trust it without verifying against the transcript.
 - **Always** write the agent-extracted `action_items` (with `source` and `evidence` per item) to the DB. Never write `readai_action_items` straight through.
@@ -559,10 +598,12 @@ group by 1 order by 1 desc;
 ## Definition of done
 
 - [ ] Config read from `system_config`; kill switch respected with a `killed` run row if disabled.
-- [ ] **Execution discipline:** no parallel `get_meeting_by_id`; list pages sequential; projects SQL at most once; no task/todo UI.
+- [ ] **Execution discipline:** no parallel `get_meeting_by_id`; list pages sequential; projects + clients SQL at most once each; no task/todo UI.
 - [ ] If more than 5 **Process** meetings, cap applied and `notes` includes `deferred_N_meetings_to_next_run` when `N > 0`.
 - [ ] Read.ai list + detail calls used with `expand` including `metrics` on list and `transcript` + full detail on get.
 - [ ] For every processed meeting, the agent read the full transcript and emitted its own `action_items` (with `source` + `evidence` per item) — Read.ai's `action_items` was not written to the DB unmodified.
+- [ ] Step 4b loaded both `projects` (with `client_id`) and `clients`; matching tried project-name → client-name-with-unique-project → attendee-domain-with-unique-project, in that order.
+- [ ] When a client matched but no project did, `processing_notes` includes a `client_match: …` (or `client_match (domain): …`) marker so reviewers see the linkage.
 - [ ] Upsert applied only for non-terminal rows; counters and `automation_runs` final status match Step 5 logic.
 - [ ] Slack alert sent only on `failed` (not `partial_success`), when Slack tools exist.
 - [ ] Final stdout matches Step 8 format for scheduled runs.
