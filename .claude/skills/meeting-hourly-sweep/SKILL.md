@@ -308,10 +308,20 @@ This step runs on **every** meeting, regardless of what `readai_action_items` co
 
 **What counts as an action item:**
 
-- An explicit commitment by a named person to do a specific thing.
-- Verb + object (`"send the design doc"`, `"file the bug"`, `"draft the SOW"`), not vague intent (`"we should think about it"`, `"that sounds good"`).
-- Owner is identifiable from the transcript — either the speaker who said `"I'll do X"` / `"I can do X"` / `"let me do X"`, or a person explicitly named (`"Maria, can you handle X?" → "yes"` → owner = Maria).
-- Decisions that imply work (`"we'll go with option B"` → only an action item if a person also commits to executing it).
+- An explicit commitment to do a specific concrete thing — by a named person, by a named role/team, or by the meeting group as a whole.
+- Verb + object across all of these categories:
+  - **Delivery work:** `"send the design doc"`, `"file the bug"`, `"draft the SOW"`, `"ship the migration"`
+  - **Comms / external messaging:** `"post status to the Discord group"`, `"message the client"`, `"slack the team"`, `"inform Lily about the iteration start"`, `"email Caitlin the brief"`
+  - **Investigation / verification:** `"check the Vercel cycle state"`, `"investigate why notifications are paused"`, `"verify the production keys"`, `"audit the file table"`
+  - **Coordination:** `"set up a sync with X"`, `"book the kickoff"`, `"share the Loom link"`
+- NOT counted: vague intent (`"we should think about it"`), things already done (`"I sent it yesterday"`).
+- Owner identification — accept any of:
+  - **Named individual:** speaker said `"I'll do X"` / `"let me do X"`, or someone said `"Maria, can you handle X?" → "yes"` → owner = the individual's name.
+  - **Team / role:** transcript says `"the team will X"`, `"engineering will run the spike"`, `"design takes the Figma pass"` → owner = `"team"` (or the named role like `"engineering"`, `"design"`).
+  - **Truly unattributed** (passive voice with no inferable subject, e.g. `"someone should look at the data"`) → owner = `null`. These are rare; if you find yourself reaching for null, re-read the surrounding lines first.
+- Decisions that imply work (`"we'll go with option B"`) — only count if a person/team also commits to executing it.
+
+**Multi-part actions must be split.** If one sentence contains two distinct verb+object commitments joined by "and" / "then" / a comma, emit them as separate items. Example: `"Francisco will upload the native binaries and sync the web build with mobile"` → two items, one per binary upload, one for web sync.
 
 **What does NOT count:**
 
@@ -397,8 +407,8 @@ Apply rules in order — first match wins:
 | `title` matches `skip_titles` from Step 0 (case-insensitive exact match OR meeting title starts with a skip title as prefix, e.g. "IMS Sync" matches "IMS Sync x Retro") | `skipped_internal` | `"internal meeting — skipped by config"` |
 | `metrics` is null (i.e. `read_ai_score`, `sentiment`, `engagement` all null) **or** `transcript` was missing/empty in Step 4a | `awaiting_readai` | `"Read.ai processing incomplete at " + now()` |
 | Agent-extracted `action_items` is empty (`[]`) after reading the full transcript | `skipped_no_actions` | `"transcript reviewed — no explicit owner-attributed commitments"` |
-| Every entry in agent-extracted `action_items` has null `owner` | `skipped_no_actions` | `"transcript reviewed — commitments present but no owner attributable"` |
-| Otherwise | `pending` | `"ready for review"` + (append `" \| unlinked meeting"` if `project_id` is null) + (append `" \| readai_action_items_diverged"` if Read.ai's hint list differed materially from the agent-extracted list — i.e. items added or removed beyond minor wording) |
+| Every entry in agent-extracted `action_items` has null `owner` AND none have owner = "team" or a named role | `skipped_no_actions` | `"transcript reviewed — commitments present but no owner attributable"` |
+| Otherwise | `pending` | `"ready for review"` + (append `" \| unlinked meeting"` if `project_id` is null) + (append `" \| readai_diverged: kept_N_dropped_M_added_K"` if Read.ai's hint list differed materially from the agent-extracted list, where N = entries in both lists, M = entries in Read.ai's list dropped by the agent, K = entries the agent added that weren't in Read.ai's list) |
 
 ### Step 4d — Upsert (with terminal-state guard)
 
@@ -593,6 +603,8 @@ group by 1 order by 1 desc;
 - **Always** expand `metrics` on every Read.ai call. This is the fix for the prior 60% coverage problem.
 - **Always** expand `transcript` on every `get_meeting_by_id` call and read it end-to-end before triage. Read.ai's `action_items` is a hint, not a source of truth — never trust it without verifying against the transcript.
 - **Always** write the agent-extracted `action_items` (with `source` and `evidence` per item) to the DB. Never write `readai_action_items` straight through.
+- **Always** treat team-level commitments (`owner = "team"` or a named role) as first-class actions. Do not filter them as aspirations just because no individual was named.
+- **Always** prefer over-extraction to under-extraction at the action-item stage. The reviewer can drop a noisy item from the queue in 2 seconds; recovering a missed item requires re-watching the meeting.
 - **Always** write an `automation_runs` row — even on kill-switch exit. Silent runs are unobservable runs.
 
 ## Definition of done
@@ -602,6 +614,8 @@ group by 1 order by 1 desc;
 - [ ] If more than 5 **Process** meetings, cap applied and `notes` includes `deferred_N_meetings_to_next_run` when `N > 0`.
 - [ ] Read.ai list + detail calls used with `expand` including `metrics` on list and `transcript` + full detail on get.
 - [ ] For every processed meeting, the agent read the full transcript and emitted its own `action_items` (with `source` + `evidence` per item) — Read.ai's `action_items` was not written to the DB unmodified.
+- [ ] Comms, investigation, coordination, and team-level commitments were considered alongside delivery work; multi-part sentences were split into separate items.
+- [ ] When divergence from `readai_action_items` exists, the kept/dropped/added counts were recorded in `processing_notes`.
 - [ ] Step 4b loaded both `projects` (with `client_id`) and `clients`; matching tried project-name → client-name-with-unique-project → attendee-domain-with-unique-project, in that order.
 - [ ] When a client matched but no project did, `processing_notes` includes a `client_match: …` (or `client_match (domain): …`) marker so reviewers see the linkage.
 - [ ] Upsert applied only for non-terminal rows; counters and `automation_runs` final status match Step 5 logic.
