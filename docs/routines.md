@@ -56,6 +56,19 @@ Some automations are **one skill = one routine**: all schemas, SQL, triage rules
 
 Observable runs (e.g. `automation_runs` rows) and kill switches in config tables belong in the skill body so operators can pause or tune without editing the UI prompt.
 
+## Downstream enrichment skills
+
+Some routines have optional follow-up work that should not affect the primary outcome. Keep that work in a separate skill and run it only after the core routine succeeds. For example, [`content-ideas-extractor`](../.claude/skills/content-ideas-extractor/SKILL.md) mines already-processed Read.ai meetings for raw content ideas, but it must never mark meetings processed, change action items, or block the meeting queue.
+
+**Pattern:**
+
+1. Core routine finishes and writes its source-of-truth state.
+2. Enrichment skill checks its own kill switch, idempotency guard, and preconditions.
+3. Enrichment writes only its own destination rows and `automation_runs` log.
+4. Any enrichment failure is logged under the enrichment routine name and does not reclassify the core run.
+
+The saved UI prompt should stay thin, for example: `Run the meeting queue processor. After each meeting is processed, run content-ideas-extractor only if enabled. Content extraction is non-blocking and must not modify meeting processing status.`
+
 ## Further reading
 
 - [`docs/architecture.md`](architecture.md) — project vs plugin layout; routines vs local sessions
