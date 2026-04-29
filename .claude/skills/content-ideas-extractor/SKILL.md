@@ -5,8 +5,6 @@ description: >-
   the IMS ops Supabase. Use after process-meeting-queue succeeds, or when asked
   to extract content ideas, mine a meeting for content, or backfill content from
   meetings.
-context: fork
-agent: general-purpose
 ---
 
 # Content ideas extractor
