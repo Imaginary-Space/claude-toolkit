@@ -11,9 +11,10 @@ description: >-
 # Vercel comments digest
 
 **What this routine does:** reads new Vercel comment threads from
-`#vercel-pings`, maps each Vercel project slug to an IMS project/client, creates
-or updates one Linear issue per Vercel thread under this week's holding issue,
-and replies in the Slack thread once with the Linear link.
+`#vercel-pings`, maps each Vercel project slug to an IMS project/client, upserts
+each comment into `public.vercel_feedback`, creates or updates one Linear issue
+per Vercel thread under this week's holding issue, and replies in the Slack
+thread once with the Linear link.
 
 ## Context
 
@@ -45,7 +46,7 @@ Cloud runs can hit per-turn tool limits. Follow these rules literally:
   parsing replies, resolving Linear, creating/updating Linear, replying in
   Slack, and upserting Supabase before reading the next thread.
 - Load project/client/team-member mapping rows from Supabase once per run.
-- Load existing `vercel_threads` rows once per run, then update local memory
+- Load existing `vercel_feedback` rows once per run, then update local memory
   after each upsert.
 - Load Linear teams/projects once per run and cache them.
 - Do not create task/todo UI during a scheduled run.
@@ -67,29 +68,52 @@ Use only Supabase project `jcuymodyrjbzwmyjzwee`.
   status, counters, `error_details`, `notes`).
 - `system_config`: read the `vercel_comments_digest.*` keys listed in Step 0.
 
-### `vercel_threads` table
+### `vercel_feedback` table
 
 This table is the idempotency surface. If it does not exist, fail before Slack
-or Linear writes. Required columns:
+or Linear writes. Required schema:
 
-```text
-id uuid pk default gen_random_uuid()
-thread_id text unique not null
-vercel_slug text not null
-project_id uuid nullable
-client_id uuid nullable
-parent_ts text not null
-linear_issue_id text
-linear_issue_url text
-linear_holding_epic_id text
-last_reply_ts text
-reply_count integer default 0
-is_stale boolean default false
-slack_reply_ts text
-status text check ('tracked','updated','unmapped','errored')
-first_seen_at timestamptz default now()
-last_synced_at timestamptz default now()
+```sql
+create table public.vercel_feedback (
+  id uuid not null default gen_random_uuid (),
+  project_id uuid null,
+  vercel_project_name text null,
+  deployment_url text null,
+  page_url text null,
+  comment text not null,
+  author_name text null,
+  author_email text null,
+  screenshot_url text null,
+  status text not null default 'open'::text,
+  priority text null,
+  external_id text null,
+  raw_payload jsonb null,
+  submitted_at timestamp with time zone not null default now(),
+  resolved_at timestamp with time zone null,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  constraint vercel_feedback_pkey primary key (id),
+  constraint vercel_feedback_external_id_key unique (external_id),
+  constraint vercel_feedback_project_id_fkey foreign KEY (project_id) references projects (id) on delete set null
+) TABLESPACE pg_default;
+
+create index IF not exists idx_vercel_feedback_status
+  on public.vercel_feedback using btree (status) TABLESPACE pg_default;
+
+create index IF not exists idx_vercel_feedback_project
+  on public.vercel_feedback using btree (project_id) TABLESPACE pg_default;
+
+create index IF not exists idx_vercel_feedback_submitted
+  on public.vercel_feedback using btree (submitted_at desc) TABLESPACE pg_default;
+
+create trigger vercel_feedback_updated_at BEFORE
+update on vercel_feedback for EACH row
+execute FUNCTION update_updated_at ();
 ```
+
+Use `external_id = vercelThreadId` for idempotency. Store routine metadata that
+does not have first-class columns, including Slack timestamps, Linear issue IDs,
+reply counts, stale flags, environment, and parse details, inside `raw_payload`.
 
 ---
 
@@ -132,10 +156,10 @@ Before any Slack or Linear write, verify required tables exist:
 select table_name
 from information_schema.tables
 where table_schema = 'public'
-  and table_name in ('project_vercel_links', 'vercel_threads', 'projects', 'clients', 'team_members');
+  and table_name in ('project_vercel_links', 'vercel_feedback', 'projects', 'clients', 'team_members');
 ```
 
-If `project_vercel_links` or `vercel_threads` is missing, insert a failed
+If `project_vercel_links` or `vercel_feedback` is missing, insert a failed
 `automation_runs` row and stop. Do not auto-migrate in this routine.
 
 ## Step 1 - Open a run log
@@ -229,8 +253,17 @@ Load existing thread rows once:
 ```sql
 select thread_id, linear_issue_id, linear_issue_url, linear_holding_epic_id,
        slack_reply_ts, status
-from vercel_threads
-where thread_id = any($1);
+from (
+  select
+    external_id as thread_id,
+    raw_payload->>'linear_issue_id' as linear_issue_id,
+    raw_payload->>'linear_issue_url' as linear_issue_url,
+    raw_payload->>'linear_holding_epic_id' as linear_holding_epic_id,
+    raw_payload->>'slack_reply_ts' as slack_reply_ts,
+    status
+  from vercel_feedback
+  where external_id = any($1)
+) existing_feedback;
 ```
 
 Cache both result sets in memory.
@@ -249,13 +282,14 @@ Team resolution order for each mapped IMS project:
    team.
 
 If no unique Linear team is resolved, mark the thread `unmapped`, upsert
-`vercel_threads`, log the reason, and skip Linear writes for that thread.
+`vercel_feedback`, log the reason, and skip Linear writes for that thread.
 
 ## Step 4 - Process each parent message
 
 For every parent in stable timestamp order, wrap the whole step in try/catch.
 On exception, increment `items_errored`, push a structured error into
-`error_details`, upsert `status = 'errored'` when possible, and continue.
+`error_details`, upsert the feedback row when possible with
+`raw_payload.processing_status = 'errored'`, and continue.
 
 ### Step 4a - Read Slack thread
 
@@ -292,8 +326,9 @@ Look up `vercel_slug` in the cached mapping.
 
 If missing:
 
-- Upsert `vercel_threads` with `project_id = null`, `client_id = null`,
-  `status = 'unmapped'`, and latest Slack metadata.
+- Upsert `vercel_feedback` with `project_id = null`, `status = 'open'`,
+  `external_id = thread_id`, the parsed `comment`, `vercel_project_name`, and
+  latest Slack metadata in `raw_payload.unmapped_reason`.
 - Append an error detail with `error_type = "unmapped_vercel_slug"`.
 - `items_skipped += 1`.
 - Continue to the next parent.
@@ -306,84 +341,34 @@ and `is_primary` for Linear formatting.
 
 Use the Step 3.1 resolution order. If unresolved:
 
-- Upsert `status = 'unmapped'`.
+- Upsert `vercel_feedback` with `status = 'open'` and
+  `raw_payload.unmapped_reason = 'unresolved_linear_team'`.
 - Append an error detail with `error_type = "unresolved_linear_team"`.
 - `items_skipped += 1`.
 - Continue.
 
-### Step 4e - Find or create the weekly holding issue
+### Step 4e - Linear issue handling
 
-Compute `week_start` as the Monday of the current ISO week in UTC, formatted
-`YYYY-MM-DD`.
+Find or create the weekly holding issue in the resolved Linear team only. Title
+it `Vercel Comments - Week of <YYYY-MM-DD>`, where the date is the current ISO
+week's Monday in UTC.
 
-Holding issue title:
+Create or update one child issue per `thread_id`. The description must include
+an `<!--auto-start-->` / `<!--auto-end-->` block with the comment, author,
+client, project, Vercel slug/project ID, Slack parent ts, Vercel thread URL,
+reply count, last human activity, stale flag, dev lead, and PM. On updates,
+preserve human content outside the auto block; if the Linear tool cannot safely
+read/replace descriptions, add a Linear comment with the refreshed auto block
+instead.
 
-```text
-Vercel Comments - Week of <week_start>
-```
+Use `vercel_feedback.raw_payload.linear_issue_id` for issue idempotency. Store
+new Linear IDs/URLs in `raw_payload`; set `raw_payload.processing_status` to
+`tracked` for new child issues or `updated` for existing child issues.
 
-Use Linear issue search/list against the resolved team for an open issue with
-that exact title. If found, use it.
+### Step 4f - Reply once in Slack
 
-If not found, create it:
-
-- `team_id` = resolved Linear team ID
-- `title` = holding issue title
-- `description` = `Auto-managed by vercel-comments-digest. New Vercel feedback threads are filed as child issues.`
-- Assign to the dev lead when Linear can resolve `dev_lead_email`; otherwise
-  leave unassigned and mention the lead in the description.
-
-Do not create the holding issue in any other team.
-
-### Step 4f - Create or update the thread issue
-
-Build an auto-managed body:
-
-```text
-<!--auto-start-->
-**Vercel comment** - [<env>] <page_pretty>
-
-> <comment_body>
-
-- Author: <comment_author>
-- Client: <client_name>
-- IMS project: <project_name>
-- Vercel slug: <vercel_slug>
-- Vercel project ID: <vercel_project_id or "unknown">
-- Slack parent ts: <parent.ts>
-- Vercel thread: https://vercel.live/link/<vercel_slug>.vercel.app?page=<page_encoded>&vercelThreadId=<thread_id>&via=slack
-- Replies excluding Vercel shell: <reply_count>
-- Last human activity: <last_reply_ts>
-- Stale: <yes|no>
-- Dev lead: <dev_lead_name or "unknown">
-- PM: <pm_name or "unknown">
-<!--auto-end-->
-```
-
-If an existing `vercel_threads.linear_issue_id` exists for `thread_id`, update
-that Linear issue. Preserve any human content outside `<!--auto-start-->` and
-`<!--auto-end-->`; replace only the auto block. If reading the existing body is
-not supported by the Linear tool, update only fields that do not overwrite
-description and add a Linear comment with the refreshed auto block instead.
-
-If no existing Linear issue exists, create a child issue under the holding issue:
-
-- `parent_id` = holding issue ID
-- `team_id` = resolved team ID
-- `title` = `[<env>] <page_pretty>`
-- `description` = auto-managed body
-- Assign to the dev lead when Linear can resolve `dev_lead_email`; otherwise
-  leave unassigned.
-
-Result status:
-
-- Created new sub-issue -> `status = 'tracked'`, `items_new += 1`
-- Updated existing sub-issue -> `status = 'updated'`, `items_queued += 1`
-
-### Step 4g - Reply once in Slack
-
-Only reply when the cached or freshly loaded `vercel_threads.slack_reply_ts` is
-null and a Linear issue URL exists.
+Only reply when `vercel_feedback.raw_payload.slack_reply_ts` is null and a
+Linear issue URL exists.
 
 ```text
 Slack:slack_send_message(
@@ -397,13 +382,32 @@ Capture the returned message timestamp as `slack_reply_ts`. If Slack send fails
 after Linear succeeded, keep the Linear issue and mark the thread error detail
 with `error_type = "slack_reply"`; do not retry inside the same run.
 
-### Step 4h - Upsert `vercel_threads`
+### Step 4g - Upsert `vercel_feedback`
 
-Upsert after each thread on conflict `(thread_id)`. Update latest Slack metadata,
-status, Linear IDs/URLs, and `last_synced_at`. Preserve any existing
-`slack_reply_ts` with `coalesce(vercel_threads.slack_reply_ts,
-excluded.slack_reply_ts)` so the routine never posts duplicate acknowledgements.
-Update the in-memory cached row after the SQL succeeds.
+Upsert after each thread on conflict `(external_id)`. Required column mapping:
+
+- `external_id` = `thread_id`
+- `project_id` = mapped IMS project ID, or `null` when unmapped
+- `vercel_project_name` = parsed Vercel slug
+- `deployment_url` = `https://vercel.live/link/<vercel_slug>.vercel.app`
+- `page_url` = decoded `page_encoded` when available, otherwise `page_pretty`
+- `comment` = parsed human comment body, or a short fallback when the body is unavailable
+- `author_name` = parsed Slack profile real name, username, or user ID fallback
+- `author_email` = parsed Slack profile email when available
+- `status` = `open` for active feedback; set `resolved_at` only when closing feedback
+- `submitted_at` = Slack parent timestamp converted to `timestamptz`
+- `raw_payload` = merged metadata JSON
+
+`raw_payload` must include `parent_ts`, `thread_id`, `env`, `page_pretty`,
+`page_encoded`, `linear_issue_id`, `linear_issue_url`, `linear_holding_epic_id`,
+`last_reply_ts`, `reply_count`, `is_stale`, `slack_reply_ts`, and
+`last_synced_at`.
+
+Preserve any existing `raw_payload.slack_reply_ts` with
+`coalesce(vercel_feedback.raw_payload->>'slack_reply_ts',
+excluded.raw_payload->>'slack_reply_ts')` semantics so the routine never posts
+duplicate acknowledgements. Update the in-memory cached row after the SQL
+succeeds.
 
 ## Step 5 - Finalize status
 
@@ -469,12 +473,13 @@ output and show the first three error details when errors exist.
 
 ## Operational notes
 
-- Apply `project_vercel_links`, `vercel_threads`, and config rows outside this
+- Apply `project_vercel_links`, `vercel_feedback`, and config rows outside this
   routine before first run. The routine checks schema but never migrates.
 - Enable by setting `system_config.vercel_comments_digest.enabled` to JSON
   `true`; pause by setting it to JSON `false`.
-- To triage unmapped slugs: query `vercel_threads where status = 'unmapped'`
-  grouped by `vercel_slug`, then insert missing `project_vercel_links` rows.
+- To triage unmapped slugs: query `vercel_feedback` rows where
+  `raw_payload->>'unmapped_reason' = 'unmapped_vercel_slug'`, grouped by
+  `vercel_project_name`, then insert missing `project_vercel_links` rows.
 - To audit recent runs: query `automation_runs where routine_name =
   'vercel_comments_digest' and started_at >= now() - interval '7 days'`.
 
@@ -483,26 +488,11 @@ output and show the first three error details when errors exist.
 - Never write to `imdcpjjnydbhbixyhulj`. Only use ops Supabase project
   `jcuymodyrjbzwmyjzwee`.
 - Never post more than one Slack acknowledgement per Vercel thread. The
-  `slack_reply_ts` guard is lifetime idempotency.
+  `raw_payload.slack_reply_ts` guard is lifetime idempotency.
 - Never create a Linear issue for an unmapped Vercel slug. Write an unmapped
-  `vercel_threads` row so humans can add `project_vercel_links`.
+  `vercel_feedback` row so humans can add `project_vercel_links`.
 - Never parallelize Slack thread reads or Linear writes.
 - Never auto-create the weekly holding issue outside the resolved Linear team.
 - Always preserve human Linear issue content outside the auto-managed block.
 - Always write an `automation_runs` row, even on kill-switch exit.
 - Always treat Slack as source of truth; do not call the Vercel API.
-
-## Definition of done
-
-- [ ] `system_config` kill switch respected; killed row written when disabled.
-- [ ] Required schema checked before any Slack or Linear writes.
-- [ ] Vercel-bot messages parsed with the exact regex; non-matches ignored.
-- [ ] One Supabase mapping snapshot and one existing-thread snapshot loaded per run.
-- [ ] Each Slack thread read and Linear write processed sequentially.
-- [ ] Unmapped slugs upsert `status = 'unmapped'` without Linear writes.
-- [ ] Weekly holding issue found or created by exact title in the resolved team.
-- [ ] One Linear sub-issue exists per `thread_id`; reruns update rather than duplicate.
-- [ ] Slack acknowledgement posted exactly once per `thread_id`.
-- [ ] Stale threads are flagged in Linear and counted in stdout.
-- [ ] Failure alert sent only on `failed`.
-- [ ] Final stdout matches Step 8 for scheduled runs.
