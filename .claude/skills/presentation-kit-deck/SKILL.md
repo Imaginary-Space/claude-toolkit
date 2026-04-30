@@ -27,13 +27,17 @@ only external write.
 The saved routine prompt should include:
 
 - `client_name` — required, e.g. `Landible`.
-- `drive_parent_folder` — required Google Drive parent folder ID or URL.
+- `drive_parent_folder` — optional when
+  `GOOGLE_DRIVE_PRESENTATIONS_FOLDER_ID` is set; otherwise required Google
+  Drive parent folder ID or URL.
 - `lookback_days` — optional, default `7`.
 - `linear_hint` — optional team, project, cycle, or workspace wording.
 - `meeting_date` — optional, default today in `America/Argentina/Buenos_Aires`.
 
-If `client_name` or `drive_parent_folder` is missing, stop and ask the user for
-it. Do not render a deck without a Drive destination.
+If `client_name` is missing, stop and ask the user for it. Resolve the Drive
+parent from `drive_parent_folder` first, then
+`GOOGLE_DRIVE_PRESENTATIONS_FOLDER_ID`. Do not render a deck without a Drive
+destination.
 
 ## Required connectors
 
@@ -41,10 +45,20 @@ The routine needs MCP access to:
 
 1. **Supabase** — read-only SQL against IMS ops project `jcuymodyrjbzwmyjzwee`.
 2. **Linear** — read issues, projects, cycles, teams, comments.
-3. **Google Drive** — create/find folder and upload files.
 
-If a connector is unavailable, continue only for optional data. Missing Drive is
-fatal because upload is part of the output contract.
+Drive upload does **not** use the Google Drive MCP connector because large PDF
+uploads through base64 tool payloads are unreliable. Instead, Drive upload uses
+`scripts/drive-upload.mjs`, which streams bytes to the Google Drive API with a
+service account.
+
+Required settings for Drive upload:
+
+- `GOOGLE_SERVICE_ACCOUNT_JSON_B64` — base64-encoded full service account JSON.
+- `GOOGLE_DRIVE_PRESENTATIONS_FOLDER_ID` — default parent folder ID, unless the
+  prompt provides `drive_parent_folder`.
+
+The Drive API must be enabled for the service account's Google Cloud project,
+and the target parent folder must be shared with the service account email.
 
 ## Local output contract
 
@@ -222,11 +236,28 @@ not upload a broken artifact.
 
 ## Step 7 — Upload to Drive
 
-In `drive_parent_folder`, create or reuse:
+Never base64 encode PDF, HTML, or JSON artifacts for upload. Do not create
+`.b64` files and do not read encoded artifacts back into the model context.
+
+Resolve `drive_parent_folder` from the prompt or
+`GOOGLE_DRIVE_PRESENTATIONS_FOLDER_ID`. In that parent, create or reuse:
 
 ```text
 <Client Name> - YYYY-MM-DD
 ```
+
+Use the service-account uploader from repo root:
+
+```bash
+folder_json="$(node scripts/drive-upload.mjs ensure-folder --parent "$DRIVE_PARENT_FOLDER_ID" --name "<Client Name> - YYYY-MM-DD")"
+folder_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$folder_json")"
+
+node scripts/drive-upload.mjs upload --file "out/<client-slug>-<YYYY-MM-DD>.pdf" --parent "$folder_id" --mime "application/pdf"
+node scripts/drive-upload.mjs upload --file "out/<client-slug>-<YYYY-MM-DD>.json" --parent "$folder_id" --mime "application/json"
+```
+
+The uploader prints Drive file JSON including `webViewLink`; capture those links
+for the final response.
 
 Upload:
 
@@ -243,8 +274,8 @@ Use this saved prompt for the first test routine:
 ```text
 Run the presentation-kit-deck skill for client Landible.
 Lookback: 7 days.
-Drive parent folder: <LANDIBLE_PRESENTATIONS_FOLDER_ID_OR_URL>.
-Connectors: Linear, Supabase (IMS ops jcuymodyrjbzwmyjzwee), Google Drive.
+Drive parent folder: use GOOGLE_DRIVE_PRESENTATIONS_FOLDER_ID unless explicitly overridden.
+Connectors: Linear, Supabase (IMS ops jcuymodyrjbzwmyjzwee).
 Success criteria: PDF and JSON uploaded to Drive; final response includes links
 and a short changelog of data pulled vs gaps.
 ```
