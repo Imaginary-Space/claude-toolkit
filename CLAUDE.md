@@ -23,6 +23,7 @@ Routine **prompts** and triggers live in the [Claude Routines UI](https://claude
 | `presentation-kit-deck` | Rich React client deck from Linear + IMS ops Supabase → presentation-kit PDF → Drive |
 | `meeting-hourly-sweep` | Hourly Read.ai → Supabase meeting queue sweep (standalone routine) |
 | `content-ideas-extractor` | Downstream Read.ai meeting content mining after meeting processing succeeds |
+| `vercel-comments-digest` | Daily Slack #vercel-pings → weekly Linear holding epics + Vercel thread replies |
 | `repo-bootstrap` | Installing this toolkit into another repository |
 
 ## Subagents (seed)
