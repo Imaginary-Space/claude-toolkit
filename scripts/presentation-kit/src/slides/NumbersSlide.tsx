@@ -60,22 +60,25 @@ export function NumbersSlide({ data, corners, footerLabel, active }: NumbersSlid
         eyebrow="02 · Numbers"
         title={data?.title ?? "By the numbers"}
         footerLabel={footerLabel}
-        contentClassName="slide-content--from-top"
+        contentClassName="slide-content--from-top slide-content--numbers"
       >
-        <HeroStatGrid cols={cols}>
-          {stats.map((s, i) => (
-            <HeroStat
-              key={`${s.label}-${i}`}
-              value={s.value}
-              label={s.label}
-              context={s.context ?? null}
-              accent={i === accentIndex}
-            />
-          ))}
-        </HeroStatGrid>
+        <div className="numbers-snapshot">
+          <div className="numbers-snapshot-label">Build snapshot</div>
+          <HeroStatGrid cols={cols}>
+            {stats.map((s, i) => (
+              <HeroStat
+                key={`${s.label}-${i}`}
+                value={s.value}
+                label={s.label}
+                context={s.context ?? null}
+                accent={i === accentIndex}
+              />
+            ))}
+          </HeroStatGrid>
+        </div>
 
         {segments.length > 0 ? (
-          <div>
+          <div className="numbers-breakdown-panel">
             {breakdownTitle ? (
               <ScopeSectionTitle>{breakdownTitle}</ScopeSectionTitle>
             ) : null}

@@ -112,6 +112,7 @@ export function TimelineSlide({ data, corners, footerLabel, active }: TimelineSl
     section.tasks.map((task) => ({
       section: section.label,
       name: task.name,
+      cells: task.cells,
       ...trackState(task.cells, dates),
     })),
   );
@@ -125,52 +126,69 @@ export function TimelineSlide({ data, corners, footerLabel, active }: TimelineSl
         contentClassName={[
           "slide-content--from-top",
           "slide-content--timeline",
+          "slide-content--milestone-timeline",
           isDense ? "slide-content--timeline-dense" : null,
         ]
           .filter(Boolean)
           .join(" ")}
       >
-        <div className="timeline-overview">
-          <div className="timeline-stage-row">
+        <div className="milestone-timeline">
+          <div
+            className="milestone-stage-row"
+            style={{ gridTemplateColumns: `360px repeat(${Math.max(numCols, 1)}, 1fr) 150px` }}
+          >
+            <div className="milestone-stage-intro">
+              <span>Project scope</span>
+            </div>
             {dates.map((date, index) => (
               <div
                 key={date}
-                className={index === todayCol ? "timeline-stage timeline-stage--today" : "timeline-stage"}
+                className={[
+                  "milestone-stage",
+                  index < todayCol ? "milestone-stage--past" : null,
+                  index === todayCol ? "milestone-stage--today" : null,
+                  index > todayCol ? "milestone-stage--future" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
               >
-                <span className="timeline-stage-dot" />
-                <span className="timeline-stage-label">{date}</span>
-                {index === todayCol ? <span className="timeline-stage-today">Today</span> : null}
+                <span className="milestone-stage-dot" />
+                <span className="milestone-stage-label">{date}</span>
+                {index === todayCol ? <span className="milestone-stage-today">Current</span> : null}
               </div>
             ))}
+            <div className="milestone-stage-end">
+              <span>Status</span>
+            </div>
           </div>
 
-          <div className="timeline-track-list">
+          <div className="milestone-lane-list">
             {tracks.map((track) => (
-              <div key={`${track.section}-${track.name}`} className="timeline-track-card">
-                <div className="timeline-track-copy">
-                  <div className="timeline-track-section">{track.section}</div>
-                  <div className="timeline-track-name">{track.name}</div>
-                </div>
-                <div className="timeline-track-state">
-                  <span className={`timeline-status timeline-status--${track.tone}`}>{track.status}</span>
-                  {track.stage ? <span className="timeline-track-stage">{track.stage}</span> : null}
+              <div key={`${track.section}-${track.name}`} className="milestone-lane">
+                <div className="milestone-lane-copy">
+                  <div className="milestone-lane-section">{track.section}</div>
+                  <div className="milestone-lane-name">{track.name}</div>
                 </div>
                 <div
-                  className="timeline-track-rail"
+                  className="milestone-lane-cells"
                   style={{ gridTemplateColumns: `repeat(${Math.max(numCols, 1)}, 1fr)` }}
                 >
-                  {dates.map((date, index) => (
-                    <span
-                      key={date}
-                      className={[
-                        "timeline-track-step",
-                        index < track.position ? "timeline-track-step--past" : null,
-                        index === track.position ? `timeline-track-step--${track.tone}` : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    />
-                  ))}
+                  {dates.map((date, index) => {
+                    const cell = normalizeCell(track.cells[index] ?? "empty");
+                    return (
+                      <span
+                        key={`${track.name}-${date}`}
+                        className={[
+                          "milestone-lane-cell",
+                          `milestone-lane-cell--${cell}`,
+                        ].join(" ")}
+                      />
+                    );
+                  })}
+                </div>
+                <div className="milestone-lane-state">
+                  <span className={`timeline-status timeline-status--${track.tone}`}>{track.status}</span>
+                  {track.stage ? <span className="timeline-track-stage">{track.stage}</span> : null}
                 </div>
               </div>
             ))}

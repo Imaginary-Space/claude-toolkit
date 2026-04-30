@@ -1,10 +1,9 @@
 import { Slide } from "../components/Slide";
 import { MissingData, getMissing } from "../components/MissingData";
 import {
-  ItemStack,
+  Pill,
   SlideCallout,
   SlideContent,
-  WorkstreamCard,
 } from "../components/slideKit";
 import type { CornerLabels, WorkstreamsData } from "../types/presentation";
 
@@ -63,23 +62,28 @@ export function WorkstreamsSlide({
     <Slide index={3} variant="cream" corners={corners} showCorners={false}>
       <SlideContent
         eyebrow="03 · This Week"
-        title={data?.title ?? "Workstreams in flight"}
+        title={data?.title ?? "Current work in flight"}
         footerLabel={footerLabel}
-        contentClassName="slide-content--from-top"
+        contentClassName="slide-content--from-top slide-content--current-work"
       >
-        <ItemStack>
-          {workstreams.map(({ id, name, impact, status, points }) => (
-            <WorkstreamCard
-              key={id}
-              id={id}
-              name={name}
-              impact={impact}
-              status={status}
-              statusVariant={statusVariant(status)}
-              points={points}
-            />
+        <div className="current-work-grid">
+          {workstreams.map(({ id, name, impact, status, points }, index) => (
+            <article key={id} className="current-work-card">
+              <div className="current-work-card-topline">
+                <span>{id}</span>
+                {points ? <span>{points}</span> : null}
+              </div>
+              <div className="current-work-card-index">{String(index + 1).padStart(2, "0")}</div>
+              <h2>{name}</h2>
+              <p>{impact}</p>
+              {status ? (
+                <div className="current-work-card-status">
+                  <Pill variant={statusVariant(status)}>{status}</Pill>
+                </div>
+              ) : null}
+            </article>
           ))}
-        </ItemStack>
+        </div>
 
         {callout?.text ? (
           <SlideCallout label={callout.label}>{callout.text}</SlideCallout>

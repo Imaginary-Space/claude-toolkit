@@ -18,12 +18,13 @@ src/
 │   └── GenerativeImage.tsx     # image card with optional prompt bar
 ├── slides/
 │   │   # Default tech-sync deck — these are the seven slides the CLI renders
-│   │   # (cover → timeline → numbers → this-week → actions → asks → closing):
+│   │   # (cover → timeline → numbers → this-week → recommendations → asks → closing):
 │   ├── CoverSlide.tsx
 │   ├── TimelineSlide.tsx       # "01 · TIMELINE"
 │   ├── NumbersSlide.tsx        # "02 · NUMBERS"
 │   ├── WorkstreamsSlide.tsx    # "03 · THIS WEEK"
-│   ├── ActionsSlide.tsx        # "04 · ACTIONS"
+│   ├── RecommendationsSlide.tsx # "04 · RECOMMENDATIONS"
+│   ├── ActionsSlide.tsx        # orphan/ad-hoc action list slide
 │   ├── AsksSlide.tsx           # "05 · ASKS"
 │   ├── ClosingSlide.tsx
 │   │   # Orphan slides — still exported for ad-hoc decks but not part of the
@@ -80,7 +81,7 @@ import {
   TimelineSlide,
   NumbersSlide,
   WorkstreamsSlide,
-  ActionsSlide,
+  RecommendationsSlide,
   AsksSlide,
   ClosingSlide,
 } from "@imaginaryspace/presentation-kit";
@@ -141,10 +142,18 @@ export function Deck() {
         corners={corners}
         footerLabel={footerLabel}
       />
-      <ActionsSlide
+      <RecommendationsSlide
         data={{
-          title: "From Monday's dev sync",
-          actions: [{ owner: "Federico", task: "Save credentials", status: "DONE" }],
+          title: "Our recommendations",
+          subtitle: "Where we think the client gets the most leverage next.",
+          recommendations: [
+            {
+              title: "Protect QA runway",
+              rationale: "Keep scope stable while the team burns down launch-critical defects.",
+              impact: "Cleaner Week 4 submission with fewer late regressions.",
+              priority: "LAUNCH READINESS",
+            },
+          ],
         }}
         corners={corners}
         footerLabel={footerLabel}
@@ -152,7 +161,20 @@ export function Deck() {
       <AsksSlide
         data={{
           title: "What we need from Nick",
-          asks: [{ ask: "Paid API key", detail: "Nationwide coverage", priority: "BLOCKING WK 2" }],
+          groups: [
+            {
+              label: "Urgent for Week 4 submission",
+              tone: "urgent",
+              items: [
+                {
+                  ask: "Paid API key",
+                  detail: "Nationwide coverage",
+                  owner: "Nick",
+                  priority: "BLOCKING WK 2",
+                },
+              ],
+            },
+          ],
         }}
         corners={corners}
         footerLabel={footerLabel}

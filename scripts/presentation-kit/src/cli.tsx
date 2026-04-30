@@ -6,11 +6,11 @@ import puppeteer from "puppeteer";
 import type { CSSProperties } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
-  ActionsSlide,
   AsksSlide,
   ClosingSlide,
   CoverSlide,
   NumbersSlide,
+  RecommendationsSlide,
   TimelineSlide,
   WorkstreamsSlide,
 } from "./index";
@@ -219,10 +219,10 @@ function Deck({ presentation }: { presentation: Presentation }) {
         active
       />
     ) : null,
-    hasRenderableData(presentation.actions_data) ? (
-      <ActionsSlide
-        key="actions"
-        data={presentation.actions_data}
+    hasRenderableData(presentation.recommendations_data) ? (
+      <RecommendationsSlide
+        key="recommendations"
+        data={presentation.recommendations_data}
         corners={corners}
         footerLabel={footerLabel}
         active

@@ -9,7 +9,7 @@
  *   2. timeline_data    → TimelineSlide       ("01 · TIMELINE")
  *   3. numbers_data     → NumbersSlide        ("02 · NUMBERS")
  *   4. workstreams_data → WorkstreamsSlide    ("03 · THIS WEEK")
- *   5. actions_data     → ActionsSlide        ("04 · ACTIONS")
+ *   5. recommendations_data → RecommendationsSlide ("04 · RECOMMENDATIONS")
  *   6. asks_data        → AsksSlide           ("05 · ASKS")
  *   7. closing_data     → ClosingSlide
  *
@@ -119,6 +119,27 @@ export interface ActionsData {
   callout?: string;
 }
 
+export interface Recommendation {
+  /** Short guidance headline, e.g. "Protect QA runway". */
+  title: string;
+  /** Why this recommendation matters now. */
+  rationale: string;
+  /** Expected outcome or client-facing benefit. */
+  impact: string;
+  /** Optional chip, e.g. "NEXT BEST MOVE", "RISK REDUCTION", "LAUNCH READINESS". */
+  priority?: string;
+}
+
+export interface RecommendationsData {
+  /** Slide-specific title, e.g. "Our recommendations". */
+  title?: string;
+  /** Optional framing line under the title. */
+  subtitle?: string;
+  recommendations?: Recommendation[];
+  /** Optional bottom callout, e.g. { label: "WHY NOW", text: "..." }. */
+  callout?: { label?: string; text: string };
+}
+
 export interface Ask {
   /** Short ask name, e.g. "Regrid paid API key". */
   ask: string;
@@ -126,12 +147,29 @@ export interface Ask {
   detail: string;
   /** Priority chip, e.g. "BLOCKING WK 2" or "DECISION". */
   priority: string;
+  /** Optional person or team the ask is needed from. */
+  owner?: string;
+}
+
+export interface AskGroup {
+  /** Section label, e.g. "Urgent for Week 4 submission". */
+  label: string;
+  /** Optional tone used for section marker color. */
+  tone?: "urgent" | "access" | "upcoming" | "default";
+  /** Optional concise section note. */
+  summary?: string;
+  items: Ask[];
 }
 
 export interface AsksData {
   /** Slide-specific title, e.g. "What we need from Nick". */
   title?: string;
+  /** Grouped asks for the default client-facing layout. */
+  groups?: AskGroup[];
+  /** Legacy flat list; rendered as one default group when `groups` is absent. */
   asks?: Ask[];
+  /** Optional bottom callout, e.g. store blocker summary. */
+  callout?: { label?: string; text: string };
 }
 
 export interface ClosingData {
@@ -167,7 +205,9 @@ export interface Presentation {
   timeline_data: TimelineData;
   numbers_data: NumbersData;
   workstreams_data: WorkstreamsData;
-  actions_data: ActionsData;
+  recommendations_data?: RecommendationsData;
+  /** Orphan/ad-hoc slide data retained for custom decks; not rendered by the default CLI. */
+  actions_data?: ActionsData;
   asks_data: AsksData;
   closing_data: ClosingData;
   created_at: string;

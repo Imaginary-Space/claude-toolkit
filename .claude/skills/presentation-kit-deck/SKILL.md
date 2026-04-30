@@ -178,7 +178,7 @@ Write a JSON object matching
 `scripts/presentation-kit/src/types/presentation.ts`.
 
 The deck always renders the **seven-slide tech-sync layout**: cover, timeline,
-numbers, this-week, actions, asks, closing. Slides 2–6 share a small-caps
+numbers, this-week, recommendations, asks, closing. Slides 2–6 share a small-caps
 ribbon (`footer_label`) such as `LANDIBLE · CYCLE 21 · APR 30, 2026`; the CLI
 derives one from `client.company` / `cycle_name` / `meeting_date` if you omit
 it.
@@ -193,8 +193,8 @@ Content guardrails:
 - Use short, plain titles. Aim for 3-6 words for slide titles and 1-3 words for
   timeline row labels; never pack status, dates, and details into the title.
 - Let details live in speaker notes, JSON evidence fields, links, or the
-  actions/asks slides. The visible deck should read like an executive sync, not
-  a task export.
+  recommendations/asks slides. The visible deck should read like an executive
+  sync, not a task export.
 
 Required top-level shape:
 
@@ -213,7 +213,7 @@ Required top-level shape:
   "timeline_data": {},
   "numbers_data": {},
   "workstreams_data": {},
-  "actions_data": {},
+  "recommendations_data": {},
   "asks_data": {},
   "closing_data": {},
   "created_at": "<ISO timestamp>",
@@ -244,16 +244,23 @@ Mapping rules:
   Linear estimates are unavailable, omit `breakdown` and add a gap.
 - `workstreams_data`: section eyebrow is auto `03 · THIS WEEK`. Provide `title`
   and `workstreams[]` of `{ id, name, impact, status, points }` for the 2–4
-  active items. Optional `callout` (e.g. `{"label":"TARGET","text":"Both QA
+  active items. This slide should answer "what is moving right now," not list
+  every ticket. Optional `callout` (e.g. `{"label":"TARGET","text":"Both QA
   streams shipping by Friday."}`).
-- `actions_data`: section eyebrow is auto `04 · ACTIONS`. Provide `title` and
-  `actions[]` of `{ owner, task, status }` (`status` is rendered as a pill —
-  `DONE` / `IN PROGRESS` / etc). Optional `callout` is a single string.
-  Source from `meetings.action_items` / `commitments` for the lookback window.
+- `recommendations_data`: section eyebrow is auto `04 · RECOMMENDATIONS`.
+  Provide `title`, optional `subtitle`, and `recommendations[]` of
+  `{ title, rationale, impact, priority }`. Use this for IMS guidance: tradeoff
+  calls, sequencing advice, launch-readiness recommendations, and risk
+  reduction. Keep to 2–4 recommendations and make the first item the strongest
+  / highest-leverage one. Optional `callout` is
+  `{ "label": "WHY NOW", "text": "..." }`.
 - `asks_data`: section eyebrow is auto `05 · ASKS`. Provide `title` and
-  `asks[]` of `{ ask, detail, priority }` (priority renders as the chip,
-  e.g. `BLOCKING WK 2`, `EASY UNBLOCK`, `DECISION`, `PHASE 3 PREP`). Source
-  from open decisions or blocked Linear issues.
+  grouped `groups[]` such as urgent blockers, access needed, and upcoming
+  input. Each group is `{ label, tone, summary, items }`, where `tone` is one of
+  `urgent`, `access`, `upcoming`, or `default`, and each item is
+  `{ ask, detail, owner, priority }`. Use flat `asks[]` only for legacy/simple
+  decks. Source from open decisions, blocked Linear issues, access requests, and
+  upcoming client dependencies.
 - `closing_data`: `heroText` (e.g. `LET'S BUILD`), `thankYou`, `teamLine`,
   and `dateLine`. The top-right image slot is optional but preferred; fill
   `closingImageUrl` and `closingImagePrompt` via Step 6.

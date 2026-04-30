@@ -8,7 +8,7 @@
  *   2. TimelineSlide       ("01 · TIMELINE")
  *   3. NumbersSlide        ("02 · NUMBERS")
  *   4. WorkstreamsSlide    ("03 · THIS WEEK")
- *   5. ActionsSlide        ("04 · ACTIONS")
+ *   5. RecommendationsSlide ("04 · RECOMMENDATIONS")
  *   6. AsksSlide           ("05 · ASKS")
  *   7. ClosingSlide
  *
@@ -81,6 +81,8 @@ export { WorkstreamsSlide } from "./slides/WorkstreamsSlide";
 export type { WorkstreamsSlideProps } from "./slides/WorkstreamsSlide";
 export { ActionsSlide } from "./slides/ActionsSlide";
 export type { ActionsSlideProps } from "./slides/ActionsSlide";
+export { RecommendationsSlide } from "./slides/RecommendationsSlide";
+export type { RecommendationsSlideProps } from "./slides/RecommendationsSlide";
 export { AsksSlide } from "./slides/AsksSlide";
 export type { AsksSlideProps } from "./slides/AsksSlide";
 export { ClosingSlide } from "./slides/ClosingSlide";
@@ -128,9 +130,12 @@ export type {
   NumbersBreakdownBar,
   WorkstreamsData,
   Workstream,
+  RecommendationsData,
+  Recommendation,
   ActionsData,
   Action,
   AsksData,
   Ask,
+  AskGroup,
   ClosingData,
 } from "./types/presentation";
