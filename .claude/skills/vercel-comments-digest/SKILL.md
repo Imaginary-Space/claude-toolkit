@@ -479,7 +479,10 @@ output and show the first three error details when errors exist.
   `true`; pause by setting it to JSON `false`.
 - To triage unmapped slugs: query `vercel_feedback` rows where
   `raw_payload->>'unmapped_reason' = 'unmapped_vercel_slug'`, grouped by
-  `vercel_project_name`, then insert missing `project_vercel_links` rows.
+  `vercel_project_name`. These are slugs where neither exact nor prefix match
+  was found. Add a `project_vercel_links` row with the **base** project slug
+  (e.g. `sponsero`, not the full branch slug); prefix matching will then
+  resolve all future staging branch deployments automatically.
 - To audit recent runs: query `automation_runs where routine_name =
   'vercel_comments_digest' and started_at >= now() - interval '7 days'`.
 
@@ -489,8 +492,9 @@ output and show the first three error details when errors exist.
   `jcuymodyrjbzwmyjzwee`.
 - Never post more than one Slack acknowledgement per Vercel thread. The
   `raw_payload.slack_reply_ts` guard is lifetime idempotency.
-- Never create a Linear issue for an unmapped Vercel slug. Write an unmapped
-  `vercel_feedback` row so humans can add `project_vercel_links`.
+- Never create a Linear issue for a slug with no exact or prefix match in
+  `project_vercel_links`. Write an unmapped `vercel_feedback` row so humans can
+  add the base slug to `project_vercel_links`.
 - Never parallelize Slack thread reads or Linear writes.
 - Never auto-create the weekly holding issue outside the resolved Linear team.
 - Always preserve human Linear issue content outside the auto-managed block.
