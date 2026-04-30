@@ -1,0 +1,40 @@
+{
+  "name": "@imaginaryspace/presentation-kit",
+  "version": "0.1.0",
+  "description": "Standalone React + CSS slide deck design system extracted from ionous-ai. Framework-agnostic primitives for building 1920×1080 presentation slides.",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "bin": {
+    "presentation-kit": "./src/cli.tsx"
+  },
+  "files": [
+    "src"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles": "./src/styles/presentations.css",
+    "./fonts": "./src/styles/fonts.css"
+  },
+  "scripts": {
+    "render": "tsx src/cli.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "puppeteer": "^24.42.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "tsx": "^4.21.0"
+  }
+}

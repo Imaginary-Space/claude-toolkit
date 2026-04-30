@@ -1,0 +1,28 @@
+/* ─── Optional font setup ────────────────────────────────────────────────
+ *
+ * The slide CSS references three font variables:
+ *   --presentation-display-font  →  used for hero / title type (Newsreader)
+ *   --presentation-body-font     →  used for everything else (Inter)
+ *   --presentation-mono-font     →  used in the missing-data inspector chips
+ *
+ * If you want to use the same fonts as the source app (Newsreader + Inter),
+ * import this file ONCE in your app entry point. It loads the fonts from
+ * Google Fonts and binds the CSS variables so the slides render identically
+ * to the original ionous-ai design.
+ *
+ * If you want to use your own fonts instead, skip this file entirely and
+ * just override the variables on your root element:
+ *
+ *   :root {
+ *     --presentation-display-font: 'Your Display Font', serif;
+ *     --presentation-body-font: 'Your Body Font', sans-serif;
+ *   }
+ * ─────────────────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap');
+
+:root {
+  --presentation-display-font: 'Newsreader', 'Georgia', serif;
+  --presentation-body-font: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --presentation-mono-font: 'SF Mono', 'Fira Code', ui-monospace, Menlo, Consolas, monospace;
+}

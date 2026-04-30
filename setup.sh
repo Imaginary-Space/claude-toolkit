@@ -28,4 +28,20 @@ if command -v npx >/dev/null 2>&1; then
   npx --yes @marp-team/marp-cli@^4 --version >/dev/null 2>&1 || true
 fi
 
+# Warm presentation-kit dependencies and Chromium for React-generated decks.
+if [[ -f "$ROOT/scripts/presentation-kit/package.json" ]]; then
+  echo "[claude-toolkit] warming presentation-kit dependencies"
+  if command -v bun >/dev/null 2>&1; then
+    (
+      cd "$ROOT/scripts/presentation-kit"
+      bun install --frozen-lockfile >/dev/null 2>&1
+    ) || true
+  elif command -v npm >/dev/null 2>&1; then
+    (
+      cd "$ROOT/scripts/presentation-kit"
+      npm install --no-audit --no-fund >/dev/null 2>&1
+    ) || true
+  fi
+fi
+
 echo "[claude-toolkit] setup complete."

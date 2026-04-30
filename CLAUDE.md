@@ -20,6 +20,7 @@ Routine **prompts** and triggers live in the [Claude Routines UI](https://claude
 | `safe-shell` | Before running shell that could be destructive |
 | `skill-author` | Adding or editing a skill in this repo |
 | `weekly-sync-deck` | Weekly client/management deck from Linear + Supabase → Marp PDF → Drive |
+| `presentation-kit-deck` | Rich React client deck from Linear + IMS ops Supabase → presentation-kit PDF → Drive |
 | `meeting-hourly-sweep` | Hourly Read.ai → Supabase meeting queue sweep (standalone routine) |
 | `content-ideas-extractor` | Downstream Read.ai meeting content mining after meeting processing succeeds |
 | `repo-bootstrap` | Installing this toolkit into another repository |

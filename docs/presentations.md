@@ -13,6 +13,33 @@ CLI examples (from repo root):
 ./scripts/build-deck.sh out/deck.md out/deck.pdf
 ```
 
+## React kit (rich client decks)
+
+Use [`scripts/presentation-kit`](../scripts/presentation-kit) when the deck needs
+the richer 1920x1080 slide system: branded cover/closing slides, velocity
+charts, sprint scope, timelines, recap columns, and demo/video slots. The kit
+renders from a typed JSON view-model (`Presentation`) to a self-contained HTML
+preview plus PDF:
+
+```bash
+./scripts/build-presentation.sh out/landible-2026-04-30.json out/landible-2026-04-30.pdf
+```
+
+The `presentation-kit-deck` skill is the routine entry point. It pulls Linear,
+IMS ops Supabase meetings/decisions, composes the JSON source, renders the PDF,
+and uploads both artifacts to Drive.
+
+Saved prompt template for the first Landible test:
+
+```text
+Run the presentation-kit-deck skill for client Landible.
+Lookback: 7 days.
+Drive parent folder: <LANDIBLE_PRESENTATIONS_FOLDER_ID_OR_URL>.
+Connectors: Linear, Supabase (IMS ops jcuymodyrjbzwmyjzwee), Google Drive.
+Success criteria: PDF and JSON uploaded to Drive; final response includes links
+and a short changelog of data pulled vs gaps.
+```
+
 ## Weekly sync narrative (AI agency shape)
 
 Optimized for **weekly client + engineering** syncs:
@@ -23,7 +50,9 @@ Optimized for **weekly client + engineering** syncs:
 4. **Discussion** — blockers, asks, and explicit **open debate** with the client (decisions, scope, priorities).
 5. **Next week + close** — commitments and links so the meeting resolves, not drifts.
 
-The `**weekly-sync-deck`** skill encodes this structure and the Linear + Supabase pull contract.
+The `weekly-sync-deck` skill encodes this structure for the Marp track. Use
+`presentation-kit-deck` when the richer React slide system should be the final
+client artifact.
 
 ## Alternatives (when to revisit)
 
