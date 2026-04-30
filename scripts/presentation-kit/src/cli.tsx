@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL, fileURLToPath as filePathFromUrl } from "node:url";
 import puppeteer from "puppeteer";
 import type { CSSProperties } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  ActionsSlide,
+  AsksSlide,
   ClosingSlide,
   CoverSlide,
-  DevUpdatesSlide,
-  RecapSlide,
-  SprintScopeSlide,
+  NumbersSlide,
   TimelineSlide,
-  VelocitySlide,
+  WorkstreamsSlide,
 } from "./index";
 import type { CornerLabels, Presentation } from "./types/presentation";
 
@@ -79,6 +79,62 @@ async function readPresentation(inputPath: string): Promise<Presentation> {
   return parsed;
 }
 
+function imageMimeFor(filePath: string): string | null {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".png") return "image/png";
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".webp") return "image/webp";
+  if (ext === ".gif") return "image/gif";
+  return null;
+}
+
+async function inlineLocalImageUrl(value: string | undefined, inputPath: string): Promise<string | undefined> {
+  const raw = value?.trim();
+  if (!raw) {
+    return value;
+  }
+  if (/^(https?:|data:)/i.test(raw)) {
+    return raw;
+  }
+
+  const imagePath = raw.startsWith("file:")
+    ? filePathFromUrl(raw)
+    : path.resolve(path.dirname(inputPath), raw);
+  const mime = imageMimeFor(imagePath);
+  if (!mime) {
+    return raw;
+  }
+
+  try {
+    const bytes = await readFile(imagePath);
+    return `data:${mime};base64,${bytes.toString("base64")}`;
+  } catch {
+    return raw;
+  }
+}
+
+async function preparePresentationAssets(
+  presentation: Presentation,
+  inputPath: string,
+): Promise<Presentation> {
+  const prepared: Presentation = {
+    ...presentation,
+    cover_data: { ...presentation.cover_data },
+    closing_data: { ...presentation.closing_data },
+  };
+
+  prepared.cover_data.coverImageUrl = await inlineLocalImageUrl(
+    presentation.cover_data?.coverImageUrl,
+    inputPath,
+  );
+  prepared.closing_data.closingImageUrl = await inlineLocalImageUrl(
+    presentation.closing_data?.closingImageUrl,
+    inputPath,
+  );
+
+  return prepared;
+}
+
 function hasRenderableData(value: unknown): boolean {
   if (value == null) {
     return false;
@@ -108,26 +164,78 @@ function cornersFor(presentation: Presentation): CornerLabels {
   };
 }
 
+/**
+ * Build the small-caps ribbon shown on slides 2–6, e.g.
+ * "LANDIBLE · CYCLE 21 · APR 30, 2026". Honours an explicit
+ * `presentation.footer_label` and otherwise derives one from the client +
+ * cycle + meeting date.
+ */
+function footerLabelFor(presentation: Presentation): string {
+  const explicit = presentation.footer_label?.trim();
+  if (explicit) {
+    return explicit;
+  }
+  const company =
+    presentation.client?.company?.trim() ||
+    presentation.client?.name?.trim() ||
+    presentation.title;
+  const cycle = presentation.cycle_name ?? presentation.sprint_name;
+  const date = presentation.meeting_date;
+  return [company, cycle, date].filter(Boolean).join(" · ").toUpperCase();
+}
+
 function Deck({ presentation }: { presentation: Presentation }) {
   const corners = cornersFor(presentation);
+  const footerLabel = footerLabelFor(presentation);
+
   const slides = [
     hasRenderableData(presentation.cover_data) ? (
       <CoverSlide key="cover" data={presentation.cover_data} corners={corners} active />
     ) : null,
     hasRenderableData(presentation.timeline_data) ? (
-      <TimelineSlide key="timeline" data={presentation.timeline_data} corners={corners} active />
+      <TimelineSlide
+        key="timeline"
+        data={presentation.timeline_data}
+        corners={corners}
+        footerLabel={footerLabel}
+        active
+      />
     ) : null,
-    hasRenderableData(presentation.velocity_data) ? (
-      <VelocitySlide key="velocity" data={presentation.velocity_data} corners={corners} active />
+    hasRenderableData(presentation.numbers_data) ? (
+      <NumbersSlide
+        key="numbers"
+        data={presentation.numbers_data}
+        corners={corners}
+        footerLabel={footerLabel}
+        active
+      />
     ) : null,
-    hasRenderableData(presentation.sprint_scope_data) ? (
-      <SprintScopeSlide key="sprint-scope" data={presentation.sprint_scope_data} corners={corners} active />
+    hasRenderableData(presentation.workstreams_data) ? (
+      <WorkstreamsSlide
+        key="workstreams"
+        data={presentation.workstreams_data}
+        corners={corners}
+        footerLabel={footerLabel}
+        active
+      />
     ) : null,
-    hasRenderableData(presentation.recap_data) ? (
-      <RecapSlide key="recap" data={presentation.recap_data} corners={corners} active />
+    hasRenderableData(presentation.actions_data) ? (
+      <ActionsSlide
+        key="actions"
+        data={presentation.actions_data}
+        corners={corners}
+        footerLabel={footerLabel}
+        active
+      />
     ) : null,
-    hasRenderableData(presentation.dev_updates_data) ? (
-      <DevUpdatesSlide key="dev-updates" data={presentation.dev_updates_data} corners={corners} />
+    hasRenderableData(presentation.asks_data) ? (
+      <AsksSlide
+        key="asks"
+        data={presentation.asks_data}
+        corners={corners}
+        footerLabel={footerLabel}
+        active
+      />
     ) : null,
     hasRenderableData(presentation.closing_data) ? (
       <ClosingSlide key="closing" data={presentation.closing_data} corners={corners} active />
@@ -206,7 +314,10 @@ async function renderPdf(htmlPath: string, outputPath: string): Promise<void> {
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
-  const presentation = await readPresentation(options.inputPath);
+  const presentation = await preparePresentationAssets(
+    await readPresentation(options.inputPath),
+    options.inputPath,
+  );
   const html = await buildHtml(presentation);
   const htmlPath =
     options.htmlPath ?? options.outputPath.replace(/\.pdf$/i, "") + ".html";

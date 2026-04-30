@@ -2,6 +2,20 @@
  * Data shapes the slide components consume. These are the "view-model" types —
  * the host app is responsible for producing them from whatever data source it
  * uses (Linear cycles, manual editor, generated content, etc.).
+ *
+ * The default deck order is fixed:
+ *
+ *   1. cover_data       → CoverSlide
+ *   2. timeline_data    → TimelineSlide       ("01 · TIMELINE")
+ *   3. numbers_data     → NumbersSlide        ("02 · NUMBERS")
+ *   4. workstreams_data → WorkstreamsSlide    ("03 · THIS WEEK")
+ *   5. actions_data     → ActionsSlide        ("04 · ACTIONS")
+ *   6. asks_data        → AsksSlide           ("05 · ASKS")
+ *   7. closing_data     → ClosingSlide
+ *
+ * Slides 2–6 share a small-caps footer ribbon (e.g. "LANDIBLE · CYCLE 21 ·
+ * APR 30, 2026"). Provide it explicitly via `footer_label`, or let the CLI
+ * derive one from `client.company` / `cycle_name` / `meeting_date`.
  */
 
 export interface CornerLabels {
@@ -28,74 +42,94 @@ export interface CoverData {
 }
 
 export interface TimelineData {
+  /** Slide-specific title, e.g. "Where we are in Phase 2". */
+  title?: string;
   dates?: string[];
   todayColumn?: number;
   sections?: {
     label: string;
     tasks: { name: string; cells: string[] }[];
   }[];
+  /** Optional bottom callout, e.g. { label: "ON PACE", text: "Foundation closed…" }. */
+  callout?: { label?: string; text: string };
 }
 
-export interface VelocityData {
-  subtitle?: string;
-  completed?: number;
-  total?: number;
-  progressPct?: number;
-  remaining?: number;
-  /** Column 0..4 = Mon..Fri for the current local work week. */
-  todayColumn?: number;
-  scopeValues?: number[];
-  startedValues?: number[];
-  completedValues?: number[];
-  /**
-   * Optional Linear-aligned stats — when all three are set, the velocity
-   * header stats match Sprint Scope bars (story points). The chart remains
-   * a cycle-wide trend (scope / started / completed ramps).
-   */
-  scopeDoneThisWeekActive?: number;
-  scopeNewMidSprintThisWeek?: number;
-  scopeRemainingPlusNext?: number;
+export interface NumbersStat {
+  /** Hero value, e.g. "8 / 27" or "+45%". */
+  value: string;
+  /** Small-caps label below the value, e.g. "ISSUES COMPLETE". */
+  label: string;
+  /** Optional contextual line, e.g. "30% of scope". */
+  context?: string;
 }
 
-export interface SprintScopeData {
-  subtitle?: string;
-  /** First bar — story points done this week + in progress (or carried-over count). */
-  carriedOver?: number;
-  /** Second bar — new mid-sprint points this week (or new-items count). */
-  newCount?: number;
-  /** Third bar — remaining sprint + next-cycle points (or total count). */
-  totalScope?: number;
-  newItems?: { id: string; text: string }[];
-  /** Switches list rows + header copy between "feedback" and "linear" modes. */
-  newItemsSource?: "feedback" | "linear";
-  /** When true, bars show "N pts"; otherwise show "N". */
-  scopeBarsArePoints?: boolean;
+export interface NumbersBreakdownBar {
+  label: string;
+  value: string;
+  /** 0–100. */
+  widthPct: number;
+  variant?: "dark" | "accent" | "outline";
 }
 
-export interface RecapData {
-  shipped?: { id: string; name: string; impact: string }[];
-  blockers?: {
-    id: string;
-    name: string;
-    impact: string;
-    /** Omit for placeholder rows (no chip). */
-    pill?: "client" | "vendor";
-  }[];
+export interface NumbersData {
+  /** Slide-specific title, e.g. "Cycle 21 by the numbers". */
+  title?: string;
+  stats?: NumbersStat[];
+  /** Section title above the breakdown bars, e.g. "STATUS BREAKDOWN". */
+  breakdownTitle?: string;
+  breakdown?: NumbersBreakdownBar[];
 }
 
-/** One dev video slot (Loom, YouTube, Vimeo embed, or direct .mp4/.webm). */
-export interface DevVideoSlot {
-  presenter?: string;
-  /** Watch or embed URL — YouTube, Loom, Vimeo, or direct video file. */
-  videoUrl?: string;
-  /** Short line on what they shipped / did. */
-  summary?: string;
+export interface Workstream {
+  /** External identifier (e.g. Linear key like "LAN-213"). */
+  id: string;
+  /** Short workstream name, e.g. "REGRID PARCEL API". */
+  name: string;
+  /** One-line impact / description. */
+  impact: string;
+  /** Status pill copy, e.g. "QA" or "IN PROGRESS". */
+  status?: string;
+  /** Story points, e.g. "8 pt" or "—". */
+  points?: string;
 }
 
-export interface DevUpdatesData {
-  subtitle?: string;
-  /** Two slots — video 1 and video 2; empty slots show placeholders. */
-  slots?: DevVideoSlot[];
+export interface WorkstreamsData {
+  /** Slide-specific title, e.g. "Three workstreams in flight". */
+  title?: string;
+  workstreams?: Workstream[];
+  callout?: { label?: string; text: string };
+}
+
+export interface Action {
+  /** Owner / assignee name. */
+  owner: string;
+  /** Action description. */
+  task: string;
+  /** Status pill copy, e.g. "DONE" or "IN PROGRESS". */
+  status: string;
+}
+
+export interface ActionsData {
+  /** Slide-specific title, e.g. "From Monday's dev sync". */
+  title?: string;
+  actions?: Action[];
+  /** Optional bottom callout text. */
+  callout?: string;
+}
+
+export interface Ask {
+  /** Short ask name, e.g. "Regrid paid API key". */
+  ask: string;
+  /** One-line detail. */
+  detail: string;
+  /** Priority chip, e.g. "BLOCKING WK 2" or "DECISION". */
+  priority: string;
+}
+
+export interface AsksData {
+  /** Slide-specific title, e.g. "What we need from Nick". */
+  title?: string;
+  asks?: Ask[];
 }
 
 export interface ClosingData {
@@ -108,8 +142,8 @@ export interface ClosingData {
 }
 
 /**
- * Aggregate deck data — all fields are optional so partial decks render
- * with the per-slide "missing data" affordance when `active` is true.
+ * Aggregate deck data — every section is optional so partial decks render with
+ * the per-slide "missing data" affordance when `active` is true.
  */
 export interface Presentation {
   id: string;
@@ -121,12 +155,18 @@ export interface Presentation {
   meeting_date: string | null;
   meeting_type: string | null;
   cycle_name: string | null;
+  /**
+   * Shared small-caps ribbon shown on slides 2–6, e.g.
+   * "LANDIBLE · CYCLE 21 · APR 30, 2026". Optional — the CLI derives a
+   * default from `client.company` / `cycle_name` / `meeting_date` when absent.
+   */
+  footer_label?: string | null;
   cover_data: CoverData;
   timeline_data: TimelineData;
-  velocity_data: VelocityData;
-  sprint_scope_data: SprintScopeData;
-  recap_data: RecapData;
-  dev_updates_data: DevUpdatesData;
+  numbers_data: NumbersData;
+  workstreams_data: WorkstreamsData;
+  actions_data: ActionsData;
+  asks_data: AsksData;
   closing_data: ClosingData;
   created_at: string;
   client: PresentationClient | null;

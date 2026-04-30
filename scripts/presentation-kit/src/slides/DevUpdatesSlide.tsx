@@ -1,8 +1,22 @@
 import { Slide } from "../components/Slide";
 import { SlideContent } from "../components/slideKit";
-import type { CornerLabels, DevUpdatesData, DevVideoSlot } from "../types/presentation";
+import type { CornerLabels } from "../types/presentation";
 
-export type { DevUpdatesData };
+/**
+ * Legacy "dev updates" data (two embedded video slots) — orphaned from the
+ * default deck. Kept inline so the slide remains a self-contained, optional
+ * building block.
+ */
+export interface DevVideoSlot {
+  presenter?: string;
+  videoUrl?: string;
+  summary?: string;
+}
+
+export interface DevUpdatesData {
+  subtitle?: string;
+  slots?: DevVideoSlot[];
+}
 
 const SLOT_COUNT = 2;
 
