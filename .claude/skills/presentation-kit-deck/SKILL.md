@@ -177,24 +177,31 @@ Use Linear MCP read-only operations.
 Write a JSON object matching
 `scripts/presentation-kit/src/types/presentation.ts`.
 
+The deck always renders the **seven-slide tech-sync layout**: cover, timeline,
+numbers, this-week, actions, asks, closing. Slides 2–6 share a small-caps
+ribbon (`footer_label`) such as `LANDIBLE · CYCLE 21 · APR 30, 2026`; the CLI
+derives one from `client.company` / `cycle_name` / `meeting_date` if you omit
+it.
+
 Required top-level shape:
 
 ```json
 {
   "id": "landible-2026-04-30",
-  "title": "Landible Weekly Update",
+  "title": "Landible Cycle 21 Tech Sync",
   "project_id": "<ops project id or client slug>",
   "linear_cycle_id": null,
   "sprint_name": null,
   "meeting_date": "2026-04-30",
-  "meeting_type": "Client update",
-  "cycle_name": null,
+  "meeting_type": "Tech Sync",
+  "cycle_name": "Cycle 21",
+  "footer_label": "LANDIBLE · CYCLE 21 · APR 30, 2026",
   "cover_data": {},
   "timeline_data": {},
-  "velocity_data": {},
-  "sprint_scope_data": {},
-  "recap_data": {},
-  "dev_updates_data": {},
+  "numbers_data": {},
+  "workstreams_data": {},
+  "actions_data": {},
+  "asks_data": {},
   "closing_data": {},
   "created_at": "<ISO timestamp>",
   "client": null
@@ -203,26 +210,96 @@ Required top-level shape:
 
 Mapping rules:
 
-- `cover_data`: `heroText` as week/cycle label, `team` as `Imaginary Space ×
-  <Client>`, `date`, and `cycle`.
-- `timeline_data`: roadmap milestones when present in Linear projects or ops
-  tables. Omit entirely if no trustworthy milestones exist.
-- `velocity_data`: story-point totals and weekday cumulative arrays. If Linear
-  estimates are absent, omit this block and add a gap.
-- `sprint_scope_data`: done/in-progress points, new mid-sprint points, remaining
-  plus next-cycle points, and a short `newItems` list.
-- `recap_data.shipped`: top 3-5 shipped Linear items with impact.
-- `recap_data.blockers`: blocked Linear issues plus decisions/asks needing
-  client action. Use `pill: "client"` for client asks, `pill: "vendor"` for
-  vendor/external waits.
-- `dev_updates_data.slots`: up to two video/demo links from Linear comments or
-  meeting notes. Omit if no real URLs exist.
-- `closing_data`: `heroText`, `thankYou`, `teamLine`, and `dateLine`.
+- `cover_data`: `heroText` is the client name in caps, `team` is
+  `IMAGINARY SPACE × <CLIENT>`, `date` is the meeting date in caps, and
+  `cycle` is a one-line cycle/phase descriptor (e.g.
+  `CYCLE 21 · TECH SYNC · PHASE 2 · WEEK 2 OF 4`). The top-right image slot is
+  optional but preferred; fill `coverImageUrl` and `coverImagePrompt` via Step 6.
+- `timeline_data`: section eyebrow is auto `01 · TIMELINE`. Set
+  `title` (e.g. "Where we are in Phase 2"), `dates` (column headers),
+  `todayColumn` (zero-indexed), and `sections[]` with task rows whose `cells`
+  are `"done" | "ongoing" | "future" | "empty"`. Optional `callout` adds an
+  "ON PACE" / status line at the bottom.
+- `numbers_data`: section eyebrow is auto `02 · NUMBERS`. Provide `title` plus
+  `stats[]` (4 cards of `{ value, label, context }` like
+  `{"value":"8 / 27","label":"ISSUES COMPLETE","context":"30% of scope"}`).
+  Optional `breakdownTitle` + `breakdown[]` renders status bars beneath. If
+  Linear estimates are unavailable, omit `breakdown` and add a gap.
+- `workstreams_data`: section eyebrow is auto `03 · THIS WEEK`. Provide `title`
+  and `workstreams[]` of `{ id, name, impact, status, points }` for the 2–4
+  active items. Optional `callout` (e.g. `{"label":"TARGET","text":"Both QA
+  streams shipping by Friday."}`).
+- `actions_data`: section eyebrow is auto `04 · ACTIONS`. Provide `title` and
+  `actions[]` of `{ owner, task, status }` (`status` is rendered as a pill —
+  `DONE` / `IN PROGRESS` / etc). Optional `callout` is a single string.
+  Source from `meetings.action_items` / `commitments` for the lookback window.
+- `asks_data`: section eyebrow is auto `05 · ASKS`. Provide `title` and
+  `asks[]` of `{ ask, detail, priority }` (priority renders as the chip,
+  e.g. `BLOCKING WK 2`, `EASY UNBLOCK`, `DECISION`, `PHASE 3 PREP`). Source
+  from open decisions or blocked Linear issues.
+- `closing_data`: `heroText` (e.g. `LET'S BUILD`), `thankYou`, `teamLine`,
+  and `dateLine`. The top-right image slot is optional but preferred; fill
+  `closingImageUrl` and `closingImagePrompt` via Step 6.
 
 Keep slide text short. Prefer identifiers and evidence links in JSON fields
 over long paragraphs.
 
-## Step 6 — Render
+## Step 6 — Generate cover / closing images
+
+If `FAL_AI_API_KEY` or `FAL_KEY` is available, use the bundled FAL image helper
+for the cover and closing top-right image slots before rendering:
+
+```bash
+node scripts/presentation-images.mjs generate out/<client-slug>-<YYYY-MM-DD>.json \
+  --client-context "<what the client does, their domain, and the product/workflow being built>"
+```
+
+The `--client-context` value should come from the data already gathered in this
+routine: client/project description, meeting summaries, Linear project
+description, active workstreams, and any user-provided context. If the context
+is long, write it to `out/<client-slug>-context.txt` and pass
+`--client-context-file out/<client-slug>-context.txt` instead.
+
+The helper combines that business context with deck JSON, calls FAL
+`fal-ai/nano-banana-2` by default, downloads generated images into
+`out/<client-slug>-<YYYY-MM-DD>-assets/`, and patches:
+
+- `cover_data.coverImageUrl`
+- `cover_data.coverImagePrompt`
+- `closing_data.closingImageUrl`
+- `closing_data.closingImagePrompt`
+
+Generated images are then inlined into the HTML/PDF during render, so the final
+PDF is self-contained.
+
+If you need to inspect or override prompts, print them first:
+
+```bash
+node scripts/presentation-images.mjs prompts out/<client-slug>-<YYYY-MM-DD>.json \
+  --client-context "<what the client does, their domain, and the product/workflow being built>"
+```
+
+If FAL is unavailable but another image-generation tool exists, use the printed
+prompts and attach the generated local file paths or hosted URLs:
+
+```bash
+node scripts/presentation-images.mjs attach out/<client-slug>-<YYYY-MM-DD>.json \
+  --cover <generated-cover-path-or-url> \
+  --closing <generated-closing-path-or-url>
+```
+
+Generated images use the fixed house prompt in `scripts/presentation-images.mjs`:
+a hand-drawn isometric schematic diagram of the client's business context with
+only 2-3 clean assets, lots of negative space, and the slide brand palette
+(`#FFFFFF`, `#0A0A0A`, `#171717`, `#E5E5E5`, `#F05100`). Cover theme is energy
+/ launch momentum; closing theme is "let's get to work" readiness. Do not
+invent a separate image direction for this routine; only feed the helper the
+client name and client-business context.
+
+If image generation is unavailable, leave the image fields blank and continue;
+do not block the deck.
+
+## Step 7 — Render
 
 Run:
 
@@ -234,7 +311,7 @@ If rendering fails, inspect the local error, fix the JSON shape or missing
 required fields, and retry once. If it still fails, report the failure and do
 not upload a broken artifact.
 
-## Step 7 — Upload to Drive
+## Step 8 — Upload to Drive
 
 Never base64 encode PDF, HTML, or JSON artifacts for upload. Do not create
 `.b64` files and do not read encoded artifacts back into the model context.
@@ -287,8 +364,9 @@ Expected first-run gaps to report, not guess around:
 - Decisions schema exists under an unexpected table name and needs schema
   discovery before querying.
 - No Linear team/project/cycle match for Landible without `linear_hint`.
-- Linear estimates/story points unavailable, which means omit `velocity_data`
-  and note the gap instead of fabricating velocity.
+- Linear estimates/story points unavailable, which means omit
+  `numbers_data.breakdown` (or the affected stat cards) and note the gap
+  instead of fabricating numbers.
 
 ## Definition of done
 

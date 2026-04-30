@@ -17,6 +17,8 @@ export interface SlideProps {
   /** Optional `data-bg` attribute (used by some host apps to swap background images). */
   dataBg?: string;
   corners?: CornerLabels;
+  /** Hide the four outer corner labels when slide chrome is handled in content. */
+  showCorners?: boolean;
   children: ReactNode;
 }
 
@@ -30,6 +32,7 @@ export function Slide({
   variant = "cream",
   dataBg,
   corners,
+  showCorners = true,
   children,
 }: SlideProps) {
   const variantClass = variant === "dark" ? "slide--dark" : "slide--cream";
@@ -52,11 +55,13 @@ export function Slide({
       {...(dataBg ? { "data-bg": dataBg } : {})}
     >
       {children}
-      {cornerEntries.map(([cls, text]) => (
-        <div key={cls} className={`slide-corner ${cls}`}>
-          {text}
-        </div>
-      ))}
+      {showCorners
+        ? cornerEntries.map(([cls, text]) => (
+            <div key={cls} className={`slide-corner ${cls}`}>
+              {text}
+            </div>
+          ))
+        : null}
     </section>
   );
 }

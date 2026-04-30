@@ -1,24 +1,27 @@
 /**
  * @imaginaryspace/presentation-kit
  *
- * Standalone slide-deck design system extracted from the ionous-ai dashboard.
- * Framework-agnostic React components + a single CSS file.
+ * Standalone slide-deck design system. The default deck shape is the seven-
+ * slide "tech sync" layout used for IMS client decks:
+ *
+ *   1. CoverSlide
+ *   2. TimelineSlide       ("01 · TIMELINE")
+ *   3. NumbersSlide        ("02 · NUMBERS")
+ *   4. WorkstreamsSlide    ("03 · THIS WEEK")
+ *   5. ActionsSlide        ("04 · ACTIONS")
+ *   6. AsksSlide           ("05 · ASKS")
+ *   7. ClosingSlide
+ *
+ * The legacy `VelocitySlide` / `SprintScopeSlide` / `RecapSlide` /
+ * `DevUpdatesSlide` components are still exported for ad-hoc composition,
+ * but are no longer part of the default deck consumed by the CLI.
  *
  * Quick start:
  *
  * ```tsx
  * import "@imaginaryspace/presentation-kit/styles";
- * import "@imaginaryspace/presentation-kit/fonts"; // optional, for Newsreader + Inter
- * import { CoverSlide, VelocitySlide } from "@imaginaryspace/presentation-kit";
- *
- * function Deck() {
- *   return (
- *     <div className="ims-presentation" style={{ ["--scale" as string]: "0.5" }}>
- *       <CoverSlide data={{ heroText: "WEEK 17", team: "Imaginary Space", date: "Apr 30", cycle: "Retro" }} />
- *       <VelocitySlide data={{ ... }} />
- *     </div>
- *   );
- * }
+ * import "@imaginaryspace/presentation-kit/fonts"; // optional, Funnel Display brand font
+ * import { CoverSlide, NumbersSlide } from "@imaginaryspace/presentation-kit";
  * ```
  */
 
@@ -29,10 +32,18 @@ export type { SlideProps, SlideVariant } from "./components/Slide";
 // Composable building blocks
 export {
   SlideContent,
+  SlideCallout,
   TextBox,
   SlideDivider,
   StatGroup,
   Stat,
+  HeroStatGrid,
+  HeroStat,
+  StackedBar,
+  ItemStack,
+  WorkstreamCard,
+  ActionRow,
+  AskRow,
   ScopeBarRow,
   ScopeSectionTitle,
   ScopeDivider,
@@ -46,7 +57,12 @@ export {
   RecapItem,
   Pill,
 } from "./components/slideKit";
-export type { TextBoxVariant, ScopeBarVariant, ChartLegendEntry } from "./components/slideKit";
+export type {
+  TextBoxVariant,
+  ScopeBarVariant,
+  ChartLegendEntry,
+  StackedBarSegment,
+} from "./components/slideKit";
 
 // Helper components
 export { MissingData, getMissing } from "./components/MissingData";
@@ -54,11 +70,23 @@ export type { MissingField } from "./components/MissingData";
 export { GenerativeImage } from "./components/GenerativeImage";
 export type { GenerativeImageProps, ImageLoader } from "./components/GenerativeImage";
 
-// Pre-assembled slide variants
+// Default deck — the seven slides the CLI renders.
 export { CoverSlide } from "./slides/CoverSlide";
 export type { CoverSlideProps } from "./slides/CoverSlide";
+export { TimelineSlide } from "./slides/TimelineSlide";
+export type { TimelineSlideProps } from "./slides/TimelineSlide";
+export { NumbersSlide } from "./slides/NumbersSlide";
+export type { NumbersSlideProps } from "./slides/NumbersSlide";
+export { WorkstreamsSlide } from "./slides/WorkstreamsSlide";
+export type { WorkstreamsSlideProps } from "./slides/WorkstreamsSlide";
+export { ActionsSlide } from "./slides/ActionsSlide";
+export type { ActionsSlideProps } from "./slides/ActionsSlide";
+export { AsksSlide } from "./slides/AsksSlide";
+export type { AsksSlideProps } from "./slides/AsksSlide";
 export { ClosingSlide } from "./slides/ClosingSlide";
 export type { ClosingSlideProps } from "./slides/ClosingSlide";
+
+// Orphan slides — not part of the default deck, but available for custom decks.
 export { BreathingSlide } from "./slides/BreathingSlide";
 export type { BreathingSlideProps } from "./slides/BreathingSlide";
 export { VelocitySlide } from "./slides/VelocitySlide";
@@ -69,8 +97,6 @@ export { RecapSlide } from "./slides/RecapSlide";
 export type { RecapSlideProps } from "./slides/RecapSlide";
 export { DevUpdatesSlide } from "./slides/DevUpdatesSlide";
 export type { DevUpdatesSlideProps } from "./slides/DevUpdatesSlide";
-export { TimelineSlide } from "./slides/TimelineSlide";
-export type { TimelineSlideProps } from "./slides/TimelineSlide";
 
 // Geometry helpers (useful if building custom chart slides)
 export {
@@ -97,10 +123,14 @@ export type {
   PresentationClient,
   CoverData,
   TimelineData,
-  VelocityData,
-  SprintScopeData,
-  RecapData,
-  DevUpdatesData,
-  DevVideoSlot,
+  NumbersData,
+  NumbersStat,
+  NumbersBreakdownBar,
+  WorkstreamsData,
+  Workstream,
+  ActionsData,
+  Action,
+  AsksData,
+  Ask,
   ClosingData,
 } from "./types/presentation";

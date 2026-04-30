@@ -1,25 +1,47 @@
 import type { CSSProperties, ReactNode } from "react";
 import { cn } from "../utils/cn";
 
-/** Standard content column for data slides (timeline, velocity, scope, recap). */
+/**
+ * Standard content column for data slides (timeline, numbers, workstreams,
+ * actions, asks).
+ *
+ * The PPTX header pattern is: small-caps eyebrow ("01 · TIMELINE"), big serif
+ * title ("Where we are in Phase 2"), and a small-caps shared footer ribbon
+ * ("LANDIBLE · CYCLE 21 · APR 30, 2026") sitting between the header band and
+ * the slide body.
+ */
 export function SlideContent({
+  eyebrow,
   title,
   subtitle,
   subtitleMarginBottom,
+  footerLabel,
   headerRight,
   contentClassName,
   children,
 }: {
+  /** Small-caps section eyebrow shown above the title, e.g. "01 · TIMELINE". */
+  eyebrow?: ReactNode;
   title: ReactNode;
   subtitle?: ReactNode;
   subtitleMarginBottom?: number;
+  /** Small-caps shared ribbon shown after the header band, e.g. "LANDIBLE · CYCLE 21 · APR 30, 2026". */
+  footerLabel?: ReactNode;
   headerRight?: ReactNode;
   /** Extra classes on the outer `.slide-content` wrapper (e.g. `slide-content--from-top`). */
   contentClassName?: string;
   children?: ReactNode;
 }) {
+  const hasEyebrow = eyebrow !== null && eyebrow !== undefined;
+  const hasFooterLabel = footerLabel !== null && footerLabel !== undefined;
   return (
     <div className={cn("slide-content", contentClassName)}>
+      {hasEyebrow || hasFooterLabel ? (
+        <div className="slide-eyebrow-row">
+          {hasEyebrow ? <span className="slide-eyebrow">{eyebrow}</span> : <span />}
+          {hasFooterLabel ? <span className="slide-meta">{footerLabel}</span> : null}
+        </div>
+      ) : null}
       {headerRight !== null && headerRight !== undefined ? (
         <div className="slide-header-row">
           <div className="slide-content-title">{title}</div>
@@ -41,6 +63,29 @@ export function SlideContent({
         </div>
       ) : null}
       {children}
+    </div>
+  );
+}
+
+/**
+ * Bottom-of-slide callout used by sections like timeline ("ON PACE …"),
+ * workstreams ("TARGET …"), and actions. Renders a left accent rule + small
+ * label + body line.
+ */
+export function SlideCallout({
+  label,
+  children,
+}: {
+  /** Optional small-caps lead-in, e.g. "ON PACE" or "TARGET". */
+  label?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="slide-callout">
+      {label !== null && label !== undefined ? (
+        <span className="slide-callout-label">{label}</span>
+      ) : null}
+      <span className="slide-callout-body">{children}</span>
     </div>
   );
 }
@@ -289,5 +334,200 @@ export function Pill({ variant, children }: { variant: "client" | "vendor"; chil
     <span className={variant === "client" ? "pill pill--client" : "pill pill--vendor"}>
       {children}
     </span>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────
+ * Hero stat grid — large at-a-glance numbers (Numbers slide).
+ * ────────────────────────────────────────────────────────── */
+
+export function HeroStatGrid({
+  cols = 4,
+  children,
+}: {
+  /** Column count — defaults to 4 to match the canonical "by the numbers" slide. */
+  cols?: 2 | 3 | 4;
+  children: ReactNode;
+}) {
+  const modifier =
+    cols === 2 ? "hero-stat-grid--cols-2" : cols === 3 ? "hero-stat-grid--cols-3" : "";
+  return <div className={cn("hero-stat-grid", modifier)}>{children}</div>;
+}
+
+export function HeroStat({
+  value,
+  label,
+  context,
+  accent,
+}: {
+  value: ReactNode;
+  label: ReactNode;
+  context?: ReactNode;
+  /** Render the value in `--brand-accent` instead of `--brand-dark`. */
+  accent?: boolean;
+}) {
+  return (
+    <div className="hero-stat">
+      <div className={cn("hero-stat-value", accent && "hero-stat-value--accent")}>{value}</div>
+      <div className="hero-stat-label">{label}</div>
+      {context !== null && context !== undefined ? (
+        <div className="hero-stat-context">{context}</div>
+      ) : null}
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────
+ * Stacked bar — single horizontal bar with N segments.
+ * ────────────────────────────────────────────────────────── */
+
+export interface StackedBarSegment {
+  label: string;
+  value: number;
+  variant?: "dark" | "accent" | "outline";
+}
+
+export function StackedBar({
+  segments,
+  showLegend = true,
+}: {
+  segments: StackedBarSegment[];
+  showLegend?: boolean;
+}) {
+  const total = segments.reduce((sum, s) => sum + (s.value > 0 ? s.value : 0), 0) || 1;
+  return (
+    <>
+      <div className="stacked-bar">
+        {segments.map((s, i) => {
+          const variant = s.variant ?? (i === 0 ? "dark" : i === 1 ? "outline" : "accent");
+          const widthPct = (Math.max(s.value, 0) / total) * 100;
+          return (
+            <div
+              key={`${s.label}-${i}`}
+              className={cn("stacked-bar-segment", `stacked-bar-segment--${variant}`)}
+              style={{ width: `${widthPct}%` }}
+            >
+              {s.value} {s.label}
+            </div>
+          );
+        })}
+      </div>
+      {showLegend ? (
+        <div className="stacked-bar-legend">
+          {segments.map((s, i) => {
+            const variant = s.variant ?? (i === 0 ? "dark" : i === 1 ? "outline" : "accent");
+            return (
+              <span key={`${s.label}-legend-${i}`} className="stacked-bar-legend-item">
+                <span
+                  className={cn(
+                    "stacked-bar-legend-swatch",
+                    variant === "accent" && "stacked-bar-legend-swatch--accent",
+                    variant === "outline" && "stacked-bar-legend-swatch--outline"
+                  )}
+                />
+                {s.label}
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────
+ * Item stacks — vertical lists with separators between rows.
+ * Used by Workstreams, Actions, Asks slides.
+ * ────────────────────────────────────────────────────────── */
+
+export function ItemStack({ children }: { children: ReactNode }) {
+  return <div className="item-stack">{children}</div>;
+}
+
+/* ──────────────────────────────────────────────────────────
+ * Workstream card row — id + serif name + impact + meta.
+ * ────────────────────────────────────────────────────────── */
+
+export function WorkstreamCard({
+  id,
+  name,
+  impact,
+  status,
+  statusVariant = "vendor",
+  points,
+}: {
+  id: string;
+  name: ReactNode;
+  impact: ReactNode;
+  status?: string;
+  statusVariant?: "client" | "vendor";
+  points?: string;
+}) {
+  return (
+    <div className="workstream-card">
+      <div className="workstream-card-id">{id}</div>
+      <div className="workstream-card-body">
+        <div className="workstream-card-name">{name}</div>
+        <div className="workstream-card-impact">{impact}</div>
+      </div>
+      <div className="workstream-card-meta">
+        {status ? <Pill variant={statusVariant}>{status}</Pill> : null}
+        {points ? <span className="workstream-card-points">{points}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────
+ * Action row — owner + task + status pill.
+ * ────────────────────────────────────────────────────────── */
+
+export function ActionRow({
+  owner,
+  task,
+  status,
+  statusVariant = "vendor",
+}: {
+  owner: ReactNode;
+  task: ReactNode;
+  status: string;
+  statusVariant?: "client" | "vendor";
+}) {
+  return (
+    <div className="action-row">
+      <div className="action-row-owner">{owner}</div>
+      <div className="action-row-task">{task}</div>
+      <div className="action-row-status">
+        <Pill variant={statusVariant}>{status}</Pill>
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────
+ * Ask row — serif ask + detail + priority chip.
+ * ────────────────────────────────────────────────────────── */
+
+export function AskRow({
+  ask,
+  detail,
+  priority,
+  priorityVariant = "vendor",
+}: {
+  ask: ReactNode;
+  detail: ReactNode;
+  priority: string;
+  priorityVariant?: "client" | "vendor";
+}) {
+  return (
+    <div className="ask-row">
+      <div>
+        <div className="ask-row-name">{ask}</div>
+        <div className="ask-row-detail">{detail}</div>
+      </div>
+      <div className="ask-row-priority">
+        <Pill variant={priorityVariant}>{priority}</Pill>
+      </div>
+    </div>
   );
 }

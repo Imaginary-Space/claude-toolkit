@@ -7,9 +7,29 @@ import {
   valuesToPath,
   valuesToPoints,
 } from "../geometry/velocity-chart-geometry";
-import type { CornerLabels, VelocityData } from "../types/presentation";
+import type { CornerLabels } from "../types/presentation";
 
-export type { VelocityData };
+/**
+ * Legacy "velocity chart" data — orphaned from the default deck. The shipping
+ * deck composes Linear/Supabase numbers via `NumbersData` instead. This type
+ * lives here (rather than in `types/presentation.ts`) so the slide stays a
+ * self-contained, optional building block.
+ */
+export interface VelocityData {
+  subtitle?: string;
+  completed?: number;
+  total?: number;
+  progressPct?: number;
+  remaining?: number;
+  /** Column 0..4 = Mon..Fri for the current local work week. */
+  todayColumn?: number;
+  scopeValues?: number[];
+  startedValues?: number[];
+  completedValues?: number[];
+  scopeDoneThisWeekActive?: number;
+  scopeNewMidSprintThisWeek?: number;
+  scopeRemainingPlusNext?: number;
+}
 
 const REQUIRED = [
   { key: "completed", description: "Completed story points, e.g. 42" },

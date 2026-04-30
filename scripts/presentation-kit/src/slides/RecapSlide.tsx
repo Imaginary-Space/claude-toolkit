@@ -8,9 +8,23 @@ import {
   RecapItem,
   SlideContent,
 } from "../components/slideKit";
-import type { CornerLabels, RecapData } from "../types/presentation";
+import type { CornerLabels } from "../types/presentation";
 
-export type { RecapData };
+/**
+ * Legacy "recap" data (shipped + blockers in two columns) — orphaned from the
+ * default deck. The shipping deck splits this content across `WorkstreamsData`
+ * and `AsksData` instead. Kept inline so the slide remains a self-contained,
+ * optional building block.
+ */
+export interface RecapData {
+  shipped?: { id: string; name: string; impact: string }[];
+  blockers?: {
+    id: string;
+    name: string;
+    impact: string;
+    pill?: "client" | "vendor";
+  }[];
+}
 
 const REQUIRED = [
   { key: "shipped", description: "Array of { id, name, impact } for shipped items" },

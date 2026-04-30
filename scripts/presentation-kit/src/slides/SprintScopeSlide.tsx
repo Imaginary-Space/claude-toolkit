@@ -7,9 +7,21 @@ import {
   ScopeSectionTitle,
   SlideContent,
 } from "../components/slideKit";
-import type { CornerLabels, SprintScopeData } from "../types/presentation";
+import type { CornerLabels } from "../types/presentation";
 
-export type { SprintScopeData };
+/**
+ * Legacy "sprint scope" data — orphaned from the default deck. Kept inline so
+ * the slide remains a self-contained, optional building block.
+ */
+export interface SprintScopeData {
+  subtitle?: string;
+  carriedOver?: number;
+  newCount?: number;
+  totalScope?: number;
+  newItems?: { id: string; text: string }[];
+  newItemsSource?: "feedback" | "linear";
+  scopeBarsArePoints?: boolean;
+}
 
 const REQUIRED = [
   { key: "carriedOver", description: "First bar value (pts or count from deck data)" },

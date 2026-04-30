@@ -23,3 +23,9 @@ venv/
 .env
 .env.*
 !.env.example
+
+# Generated presentation output (scratch dir for build-deck.sh / build-presentation.sh)
+out/
+
+# Local deck exports left at repo root
+/*.pptx
