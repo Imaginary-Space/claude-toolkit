@@ -188,6 +188,8 @@ Content guardrails:
 - Timeline is a broad status narrative: where we are, where we are going, and
   what stage the project is in. Do not break it down into individual Linear
   issues, implementation tasks, or ticket-sized rows.
+- Timeline should show 3-5 tracks maximum. Each track is a durable workstream
+  or phase, not a feature checklist. Avoid color-key-heavy Gantt charts.
 - Use short, plain titles. Aim for 3-6 words for slide titles and 1-3 words for
   timeline row labels; never pack status, dates, and details into the title.
 - Let details live in speaker notes, JSON evidence fields, links, or the
@@ -227,12 +229,14 @@ Mapping rules:
   `CYCLE 21 · TECH SYNC · PHASE 2 · WEEK 2 OF 4`). The top-right image slot is
   optional but preferred; fill `coverImageUrl` and `coverImagePrompt` via Step 6.
 - `timeline_data`: section eyebrow is auto `01 · TIMELINE`. Set
-  `title` (e.g. "Phase 2 progress"), `dates` (broad week/phase headers),
-  `todayColumn` (zero-indexed), and `sections[]` with stage-level rows whose
-  `cells` are `"done" | "ongoing" | "future" | "empty"`. Although the JSON
-  property is named `tasks`, each row should be a milestone or project stage
-  like `Foundation`, `QA`, `Launch prep`, or `Phase 3`, not an individual task.
-  Optional `callout` adds an "ON PACE" / status line at the bottom.
+  `title` (e.g. "Phase 2 progress"), `dates` (broad labels like `Now`, `Next`,
+  `Then`, `Launch`), `todayColumn` (zero-indexed), and `sections[]` with 3-5
+  track rows whose `cells` are `"done" | "ongoing" | "future" | "empty"`.
+  Although the JSON property is named `tasks`, each row should be a track or
+  stage like `Platform`, `QA`, `Launch prep`, or `Phase 3`, not an individual
+  ticket. Use only one `ongoing` cell per track when possible so the slide reads
+  as current status, not a dense schedule. Optional `callout` adds an "ON PACE"
+  / status line at the bottom.
 - `numbers_data`: section eyebrow is auto `02 · NUMBERS`. Provide `title` plus
   `stats[]` (4 cards of `{ value, label, context }` like
   `{"value":"8 / 27","label":"ISSUES COMPLETE","context":"30% of scope"}`).

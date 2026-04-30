@@ -1,19 +1,86 @@
 import { Slide } from "../components/Slide";
 import { MissingData, getMissing } from "../components/MissingData";
-import {
-  GanttBar,
-  GanttLegend,
-  SlideCallout,
-  SlideContent,
-} from "../components/slideKit";
+import { SlideCallout, SlideContent } from "../components/slideKit";
 import type { CornerLabels, TimelineData } from "../types/presentation";
 
 export type { TimelineData };
 
 const REQUIRED = [
-  { key: "dates", description: 'Array of column date labels, e.g. ["Apr 20", "Apr 27", ...]' },
+  { key: "dates", description: 'Array of broad stage labels, e.g. ["Now", "Next", "Launch"]' },
   { key: "sections", description: "Array of { label, tasks: [{ name, cells }] }" },
 ];
+
+type TimelineCell = "done" | "ongoing" | "future" | "empty";
+
+function normalizeCell(value: string): TimelineCell {
+  if (value === "done" || value === "ongoing" || value === "future" || value === "empty") {
+    return value;
+  }
+  return "empty";
+}
+
+function clampIndex(index: number, dates: string[]) {
+  return Math.min(Math.max(index, 0), Math.max(dates.length - 1, 0));
+}
+
+function trackState(cells: string[], dates: string[]) {
+  const normalized = cells.map(normalizeCell);
+  const ongoingIndex = normalized.indexOf("ongoing");
+  const doneIndexes = normalized
+    .map((cell, index) => (cell === "done" ? index : -1))
+    .filter((index) => index >= 0);
+  const futureIndex = normalized.indexOf("future");
+  const hasFuture = futureIndex >= 0;
+  const lastDoneIndex = doneIndexes.length > 0 ? doneIndexes[doneIndexes.length - 1] : -1;
+  const hasDone = lastDoneIndex >= 0;
+
+  if (ongoingIndex >= 0) {
+    const position = clampIndex(ongoingIndex, dates);
+    return {
+      status: "In progress",
+      tone: "active",
+      position,
+      stage: dates[position],
+    };
+  }
+
+  if (hasDone && !hasFuture) {
+    const position = clampIndex(lastDoneIndex, dates);
+    return {
+      status: "Complete",
+      tone: "done",
+      position,
+      stage: dates[position],
+    };
+  }
+
+  if (hasDone && hasFuture) {
+    const position = clampIndex(futureIndex, dates);
+    return {
+      status: "Next",
+      tone: "next",
+      position,
+      stage: dates[position],
+    };
+  }
+
+  if (hasFuture) {
+    const position = clampIndex(futureIndex, dates);
+    return {
+      status: "Queued",
+      tone: "future",
+      position,
+      stage: dates[position],
+    };
+  }
+
+  return {
+    status: "Planned",
+    tone: "future",
+    position: 0,
+    stage: dates[0],
+  };
+}
 
 export interface TimelineSlideProps {
   data?: TimelineData;
@@ -35,13 +102,19 @@ export function TimelineSlide({ data, corners, footerLabel, active }: TimelineSl
   }
 
   const dates = data?.dates ?? [];
-  const todayCol = data?.todayColumn ?? 0;
+  const todayCol = Math.min(Math.max(data?.todayColumn ?? 0, 0), Math.max(dates.length - 1, 0));
   const sections = data?.sections ?? [];
   const numCols = dates.length;
-  const safeCols = Math.max(numCols, 1);
   const callout = data?.callout;
   const taskCount = sections.reduce((count, section) => count + section.tasks.length, 0);
-  const isDense = numCols >= 7 || taskCount >= 9;
+  const isDense = taskCount >= 7;
+  const tracks = sections.flatMap((section) =>
+    section.tasks.map((task) => ({
+      section: section.label,
+      name: task.name,
+      ...trackState(task.cells, dates),
+    })),
+  );
 
   return (
     <Slide index={1} variant="cream" dataBg="slide-2.jpg" corners={corners} showCorners={false}>
@@ -57,53 +130,52 @@ export function TimelineSlide({ data, corners, footerLabel, active }: TimelineSl
           .filter(Boolean)
           .join(" ")}
       >
-        <div
-          className="gantt-grid"
-          style={{ gridTemplateColumns: `var(--gantt-task-col-width) repeat(${numCols}, 1fr)` }}
-        >
-          <div
-            className="today-line"
-            style={{
-              left: `calc(var(--gantt-task-col-width) + ((${todayCol} + 0.5) / ${safeCols}) * (100% - var(--gantt-task-col-width)))`,
-              transform: "translateX(-50%)",
-            }}
-          >
-            <div className="today-label">Today</div>
-          </div>
-
-          <div className="gantt-header">
-            <div>Cycle / work</div>
-            {dates.map((d) => (
-              <div key={d}>{d}</div>
+        <div className="timeline-overview">
+          <div className="timeline-stage-row">
+            {dates.map((date, index) => (
+              <div
+                key={date}
+                className={index === todayCol ? "timeline-stage timeline-stage--today" : "timeline-stage"}
+              >
+                <span className="timeline-stage-dot" />
+                <span className="timeline-stage-label">{date}</span>
+                {index === todayCol ? <span className="timeline-stage-today">Today</span> : null}
+              </div>
             ))}
           </div>
 
-          {sections.map((section) => (
-            <div key={section.label} style={{ display: "contents" }}>
-              <div className="gantt-section-label">{section.label}</div>
-              {section.tasks.map((task) => (
-                <div key={task.name} className="gantt-row">
-                  <div className="gantt-task-cell">
-                    <span className="task-name">{task.name}</span>
-                  </div>
-                  {task.cells.map((cell, ci) => (
-                    <div key={ci}>
-                      <GanttBar status={cell as "done" | "ongoing" | "future" | "empty"} />
-                    </div>
+          <div className="timeline-track-list">
+            {tracks.map((track) => (
+              <div key={`${track.section}-${track.name}`} className="timeline-track-card">
+                <div className="timeline-track-copy">
+                  <div className="timeline-track-section">{track.section}</div>
+                  <div className="timeline-track-name">{track.name}</div>
+                </div>
+                <div className="timeline-track-state">
+                  <span className={`timeline-status timeline-status--${track.tone}`}>{track.status}</span>
+                  {track.stage ? <span className="timeline-track-stage">{track.stage}</span> : null}
+                </div>
+                <div
+                  className="timeline-track-rail"
+                  style={{ gridTemplateColumns: `repeat(${Math.max(numCols, 1)}, 1fr)` }}
+                >
+                  {dates.map((date, index) => (
+                    <span
+                      key={date}
+                      className={[
+                        "timeline-track-step",
+                        index < track.position ? "timeline-track-step--past" : null,
+                        index === track.position ? `timeline-track-step--${track.tone}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    />
                   ))}
                 </div>
-              ))}
-            </div>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
-
-        <GanttLegend
-          items={[
-            { barClass: "bar-done", label: "Done" },
-            { barClass: "bar-ongoing", label: "In flight" },
-            { barClass: "bar-future", label: "Upcoming" },
-          ]}
-        />
 
         {callout?.text ? (
           <SlideCallout label={callout.label}>{callout.text}</SlideCallout>

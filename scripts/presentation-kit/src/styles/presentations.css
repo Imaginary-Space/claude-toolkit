@@ -771,6 +771,203 @@
   flex: 0 0 auto;
 }
 
+/* ─── Timeline tracks ──────────────────────────────────── */
+
+.ims-presentation .slide-content--from-top > .timeline-overview {
+  flex: 0 0 auto;
+}
+
+.ims-presentation .timeline-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+  width: 100%;
+}
+
+.ims-presentation .timeline-stage-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--brand-dark);
+  border-bottom: 1px solid var(--muted-border);
+}
+
+.ims-presentation .timeline-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 82px;
+  padding: 20px 20px 16px;
+  border-right: 1px solid var(--border-light);
+}
+
+.ims-presentation .timeline-stage:last-child {
+  border-right: 0;
+}
+
+.ims-presentation .timeline-stage-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--muted-border);
+}
+
+.ims-presentation .timeline-stage-label {
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--brand-dark);
+}
+
+.ims-presentation .timeline-stage-today {
+  position: absolute;
+  right: 18px;
+  top: 18px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--brand-accent);
+}
+
+.ims-presentation .timeline-stage--today .timeline-stage-dot {
+  background: var(--brand-accent);
+}
+
+.ims-presentation .timeline-track-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.ims-presentation .timeline-track-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 26px 22px;
+  min-height: 148px;
+  padding: 26px 28px 24px;
+  border: 1px solid var(--muted-border);
+  background: rgba(255, 255, 255, 0.48);
+}
+
+.ims-presentation .timeline-track-copy {
+  min-width: 0;
+}
+
+.ims-presentation .timeline-track-section {
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--brand-accent);
+}
+
+.ims-presentation .timeline-track-name {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  color: var(--brand-dark);
+}
+
+.ims-presentation .timeline-track-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 126px;
+  text-align: right;
+}
+
+.ims-presentation .timeline-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 104px;
+  padding: 8px 12px;
+  border: 1px solid var(--muted-border);
+  border-radius: 999px;
+  background: var(--brand-paper);
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.ims-presentation .timeline-status--active {
+  border-color: var(--brand-accent);
+  color: var(--brand-accent);
+}
+
+.ims-presentation .timeline-status--done {
+  border-color: var(--brand-dark);
+  background: var(--brand-dark);
+  color: var(--brand-paper);
+}
+
+.ims-presentation .timeline-track-stage {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.ims-presentation .timeline-track-rail {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+  align-items: center;
+}
+
+.ims-presentation .timeline-track-step {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg-warm);
+}
+
+.ims-presentation .timeline-track-step--past,
+.ims-presentation .timeline-track-step--done {
+  background: var(--brand-dark);
+}
+
+.ims-presentation .timeline-track-step--active {
+  background: var(--brand-accent);
+}
+
+.ims-presentation .timeline-track-step--next,
+.ims-presentation .timeline-track-step--future {
+  background: var(--muted-border);
+}
+
+.ims-presentation .slide-content--timeline-dense .timeline-overview {
+  gap: 22px;
+}
+
+.ims-presentation .slide-content--timeline-dense .timeline-stage {
+  min-height: 64px;
+  padding: 14px 16px 12px;
+}
+
+.ims-presentation .slide-content--timeline-dense .timeline-track-list {
+  gap: 12px;
+}
+
+.ims-presentation .slide-content--timeline-dense .timeline-track-card {
+  min-height: 116px;
+  padding: 20px 22px 18px;
+  gap: 18px;
+}
+
+.ims-presentation .slide-content--timeline-dense .timeline-track-name {
+  font-size: 24px;
+}
+
 /* ─── Breathing Exercise (slide 1) ──────────────────────── */
 
 .ims-presentation .breathing-bg {
@@ -1737,18 +1934,18 @@
   animation: ims-bar-grow 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.6s both;
 }
 
-/* ─── Gantt / Timeline ────────────────────────────────── */
+/* ─── Timeline ─────────────────────────────────────────── */
 
-.ims-presentation-fullscreen [data-slide-state="entering"] .gantt-grid {
+.ims-presentation-fullscreen [data-slide-state="entering"] .timeline-overview {
   animation: ims-rise 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.35s both;
 }
 
-.ims-presentation-fullscreen [data-slide-state="entering"] .gantt-bar {
+.ims-presentation-fullscreen [data-slide-state="entering"] .timeline-track-step {
   animation: ims-reveal-right 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.55s both;
 }
 
-.ims-presentation-fullscreen [data-slide-state="entering"] .gantt-legend {
-  animation: ims-fade-in 0.5s ease-out 0.7s both;
+.ims-presentation-fullscreen [data-slide-state="entering"] .timeline-status {
+  animation: ims-fade-in 0.5s ease-out 0.65s both;
 }
 
 /* ─── Scope bars stagger in row by row ────────────────── */

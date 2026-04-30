@@ -109,7 +109,11 @@ export function Deck() {
           sections: [
             {
               label: "Phase 2",
-              tasks: [{ name: "Foundation", cells: ["done", "empty", "empty", "empty"] }],
+              tasks: [
+                { name: "Platform", cells: ["done", "ongoing", "empty", "empty"] },
+                { name: "QA", cells: ["empty", "ongoing", "future", "empty"] },
+                { name: "Launch prep", cells: ["empty", "empty", "future", "future"] },
+              ],
             },
           ],
         }}
