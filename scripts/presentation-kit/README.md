@@ -103,8 +103,8 @@ export function Deck() {
       />
       <TimelineSlide
         data={{
-          title: "Where we are in Phase 2",
-          dates: ["Apr 20", "Apr 27", "May 4", "May 11"],
+          title: "Phase 2 progress",
+          dates: ["Now", "Next", "Then", "Launch"],
           todayColumn: 1,
           sections: [
             {

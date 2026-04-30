@@ -183,6 +183,17 @@ ribbon (`footer_label`) such as `LANDIBLE · CYCLE 21 · APR 30, 2026`; the CLI
 derives one from `client.company` / `cycle_name` / `meeting_date` if you omit
 it.
 
+Content guardrails:
+
+- Timeline is a broad status narrative: where we are, where we are going, and
+  what stage the project is in. Do not break it down into individual Linear
+  issues, implementation tasks, or ticket-sized rows.
+- Use short, plain titles. Aim for 3-6 words for slide titles and 1-3 words for
+  timeline row labels; never pack status, dates, and details into the title.
+- Let details live in speaker notes, JSON evidence fields, links, or the
+  actions/asks slides. The visible deck should read like an executive sync, not
+  a task export.
+
 Required top-level shape:
 
 ```json
@@ -216,10 +227,12 @@ Mapping rules:
   `CYCLE 21 · TECH SYNC · PHASE 2 · WEEK 2 OF 4`). The top-right image slot is
   optional but preferred; fill `coverImageUrl` and `coverImagePrompt` via Step 6.
 - `timeline_data`: section eyebrow is auto `01 · TIMELINE`. Set
-  `title` (e.g. "Where we are in Phase 2"), `dates` (column headers),
-  `todayColumn` (zero-indexed), and `sections[]` with task rows whose `cells`
-  are `"done" | "ongoing" | "future" | "empty"`. Optional `callout` adds an
-  "ON PACE" / status line at the bottom.
+  `title` (e.g. "Phase 2 progress"), `dates` (broad week/phase headers),
+  `todayColumn` (zero-indexed), and `sections[]` with stage-level rows whose
+  `cells` are `"done" | "ongoing" | "future" | "empty"`. Although the JSON
+  property is named `tasks`, each row should be a milestone or project stage
+  like `Foundation`, `QA`, `Launch prep`, or `Phase 3`, not an individual task.
+  Optional `callout` adds an "ON PACE" / status line at the bottom.
 - `numbers_data`: section eyebrow is auto `02 · NUMBERS`. Provide `title` plus
   `stats[]` (4 cards of `{ value, label, context }` like
   `{"value":"8 / 27","label":"ISSUES COMPLETE","context":"30% of scope"}`).

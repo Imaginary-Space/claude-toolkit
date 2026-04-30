@@ -42,12 +42,13 @@ export interface CoverData {
 }
 
 export interface TimelineData {
-  /** Slide-specific title, e.g. "Where we are in Phase 2". */
+  /** Short slide title, e.g. "Phase 2 progress". */
   title?: string;
   dates?: string[];
   todayColumn?: number;
   sections?: {
     label: string;
+    /** Stage-level rows; despite the legacy name, these are not ticket tasks. */
     tasks: { name: string; cells: string[] }[];
   }[];
   /** Optional bottom callout, e.g. { label: "ON PACE", text: "Foundation closed…" }. */
