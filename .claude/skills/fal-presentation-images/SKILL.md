@@ -9,7 +9,7 @@ description: >-
 # FAL presentation images
 
 Use this skill after a `scripts/presentation-kit` deck JSON exists and before
-rendering the PDF.
+rendering the PPTX.
 
 ## Requirements
 
@@ -50,7 +50,7 @@ What it does:
 Then render normally:
 
 ```bash
-./scripts/build-presentation.sh out/<client-slug>-<YYYY-MM-DD>.json out/<client-slug>-<YYYY-MM-DD>.pdf
+./scripts/build-presentation.sh out/<client-slug>-<YYYY-MM-DD>.json out/<client-slug>-<YYYY-MM-DD>.pptx
 ```
 
 ## Useful options

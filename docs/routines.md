@@ -23,7 +23,7 @@ The prompt in the Claude UI should:
 
 - Name the **skill** or **script** to follow (e.g. invoke the `weekly-sync-deck` skill, run `./scripts/build-deck.sh`).
 - List **connectors** the run needs (and remove unused ones in the routine form—[routines docs](https://code.claude.com/docs/en/routines) recommend scoping connectors).
-- State **success criteria** (e.g. PDF uploaded to a given Drive path).
+- State **success criteria** (e.g. PPTX uploaded to a given Drive path).
 - Stay **self-contained** (no reliance on prior chat).
 
 Heavy instructions, slide structure, and data contracts belong in **git** (skills + docs), not duplicated in long UI prompts.

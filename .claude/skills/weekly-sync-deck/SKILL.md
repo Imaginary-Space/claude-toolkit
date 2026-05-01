@@ -2,14 +2,14 @@
 name: weekly-sync-deck
 description: >-
   Builds a weekly client/management sync slide deck from Linear + Supabase via
-  MCP connectors, renders a PDF with Marp, and prepares content for Google Drive
+  MCP connectors, renders a PPTX with Marp, and prepares content for Google Drive
   upload. Use for Thursday (or any) recurring syncs, roadmap-vs-reality
   updates, sprint shipped summaries, demo slots, blockers/asks, and close-out.
 ---
 
 # Weekly sync deck (AI agency, fast ship cadence)
 
-Use this skill when a cloud (or local) session must produce a **single PDF deck** for stakeholders: management timeline check, what shipped, demos, discussion, clean close.
+Use this skill when a cloud (or local) session must produce a **single PowerPoint deck** for stakeholders: management timeline check, what shipped, demos, discussion, clean close.
 
 Further context: [`docs/presentations.md`](../../../docs/presentations.md).
 
@@ -61,15 +61,15 @@ Collapse extra demo slides if only one demo; never drop Discussion or Close-out.
 4. Run from repo root:
 
    ```bash
-   ./scripts/build-deck.sh out/deck.md out/deck.pdf
+   ./scripts/build-deck.sh out/deck.md out/deck.pptx
    ```
 
-5. **Google Drive (via MCP connector):** create folder `Thursday - YYYY-MM-DD` (meeting Thursday’s date in agreed timezone) under the team’s presentations parent folder if missing; upload **`out/deck.pdf`** and optionally **`out/deck.md`** source for diffability.
+5. **Google Drive (via MCP connector):** create folder `Thursday - YYYY-MM-DD` (meeting Thursday’s date in agreed timezone) under the team’s presentations parent folder if missing; upload **`out/deck.pptx`** as the final deck artifact, not a PDF, and optionally **`out/deck.md`** source for diffability.
 6. End the session with **links** to the uploaded files and a short **changelog** of what was pulled vs what fell back to placeholders.
 
 ## Definition of done
 
-- [ ] `out/deck.pdf` renders without Marp errors.
+- [ ] `out/deck.pptx` renders without Marp errors.
 - [ ] Deck reflects real Linear + Supabase pulls where connectors succeeded.
 - [ ] Drive upload path matches the routine’s configured parent folder + `Thursday - <date>` convention.
 - [ ] Session output lists any data gaps or manual follow-ups.

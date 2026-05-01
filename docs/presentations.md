@@ -3,14 +3,14 @@
 ## Why [Marp](https://github.com/marp-team/marp-cli) here
 
 - **Markdown source** — easy for humans and agents to edit, diff, and review in git.
-- **One command to PDF** — `@marp-team/marp-cli` renders PDF (and optionally PPTX/HTML) with sensible defaults; PDF supports **outlines** and **presenter notes** for live reads.
+- **One command to PPTX** — `@marp-team/marp-cli` renders PPTX with sensible defaults for Drive uploads. PDF remains available when outlines are needed for live reads, but the final Drive deck should be the `.pptx`.
 - **Theming** — CSS-based themes (see `.claude/skills/weekly-sync-deck/templates/theme.css`) keep decks on-brand without proprietary slide builders.
 - **Fits cloud routines** — Marp is warmed via [`setup.sh`](../setup.sh) (called from a **SessionStart** hook in cloud — see [`docs/routines.md`](routines.md)); no OAuth required for **rendering** (upload is separate via the Google Drive connector).
 
 CLI examples (from repo root):
 
 ```bash
-./scripts/build-deck.sh out/deck.md out/deck.pdf
+./scripts/build-deck.sh out/deck.md out/deck.pptx
 ```
 
 ## React kit (rich client decks)
@@ -18,16 +18,20 @@ CLI examples (from repo root):
 Use [`scripts/presentation-kit`](../scripts/presentation-kit) when the deck needs
 the richer 1920x1080 slide system: branded cover/closing slides, velocity
 charts, sprint scope, timelines, recap columns, and demo/video slots. The kit
-renders from a typed JSON view-model (`Presentation`) to a self-contained HTML
-preview plus PDF:
+renders from a typed JSON view-model (`Presentation`) to a native, editable PPTX
+plus a self-contained HTML preview:
 
 ```bash
-./scripts/build-presentation.sh out/landible-2026-04-30.json out/landible-2026-04-30.pdf
+./scripts/build-presentation.sh out/landible-2026-04-30.json out/landible-2026-04-30.pptx
 ```
 
 The `presentation-kit-deck` skill is the routine entry point. It pulls Linear,
-IMS ops Supabase meetings/decisions, composes the JSON source, renders the PDF,
-and uploads both artifacts to Drive.
+IMS ops Supabase meetings/decisions, composes the JSON source, renders the PPTX,
+and uploads the PPTX deck plus JSON source to Drive.
+
+The PPTX is generated directly with PowerPoint text, shape, line, chart-like, and
+image objects. Do not rasterize the HTML/PDF into a PPTX for final delivery; that
+creates slide images instead of an editable client deck.
 
 Saved prompt template for the first Landible test:
 
@@ -36,7 +40,7 @@ Run the presentation-kit-deck skill for client Landible.
 Lookback: 7 days.
 Drive parent folder: <LANDIBLE_PRESENTATIONS_FOLDER_ID_OR_URL>.
 Connectors: Linear, Supabase (IMS ops jcuymodyrjbzwmyjzwee), Google Drive.
-Success criteria: PDF and JSON uploaded to Drive; final response includes links
+Success criteria: PPTX and JSON uploaded to Drive; final response includes links
 and a short changelog of data pulled vs gaps.
 ```
 
@@ -60,7 +64,7 @@ client artifact.
 | Approach              | Pros                                                        | Cons                                                             |
 | --------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------- |
 | **Google Slides API** | Native collaborative editing, pixel-perfect brand templates | OAuth/service account complexity; heavier agent loop for layout  |
-| **Reveal.js / HTML**  | Great for engineering-only or embedded web                  | Client may expect a PDF in Drive; print/export story is separate |
+| **Reveal.js / HTML**  | Great for engineering-only or embedded web                  | Client may expect a PPTX in Drive; print/export story is separate |
 
 
-Stick with **Marp → PDF** until you need live co-editing in Slides or a hosted HTML deck as the primary artifact.
+Stick with **Marp / presentation-kit → PPTX** until you need live co-editing in Slides or a hosted HTML deck as the primary artifact.

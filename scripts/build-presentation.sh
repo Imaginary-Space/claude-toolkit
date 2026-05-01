@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Render a presentation-kit JSON deck to PDF (run from anywhere; paths default to repo root).
+# Render a presentation-kit JSON deck to PPTX or PDF (run from anywhere; paths default to repo root).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-input="${1:?usage: build-presentation.sh <input.json> [output.pdf]}"
-output="${2:-out/presentation.pdf}"
+input="${1:?usage: build-presentation.sh <input.json> [output.pptx|output.pdf]}"
+output="${2:-out/presentation.pptx}"
 
 if [[ "$input" = /* ]]; then
   inpath="$input"
@@ -19,7 +19,11 @@ else
   outpath="$ROOT/$output"
 fi
 
-htmlpath="${outpath%.pdf}.html"
+case "$outpath" in
+  *.pdf) htmlpath="${outpath%.pdf}.html" ;;
+  *.pptx) htmlpath="${outpath%.pptx}.html" ;;
+  *) echo "output must end in .pptx or .pdf" >&2; exit 1 ;;
+esac
 
 cd "$ROOT/scripts/presentation-kit"
 

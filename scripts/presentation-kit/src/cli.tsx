@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL, fileURLToPath as filePathFromUrl } from "
 import puppeteer from "puppeteer";
 import type { CSSProperties } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { cornersFor, footerLabelFor, hasRenderableData } from "./deckModel";
 import {
   AsksSlide,
   ClosingSlide,
@@ -14,11 +15,11 @@ import {
   TimelineSlide,
   WorkstreamsSlide,
 } from "./index";
-import type { CornerLabels, Presentation } from "./types/presentation";
+import { SLIDE_HEIGHT, SLIDE_WIDTH } from "./layout";
+import { renderDeckToPptx } from "./pptx/renderDeck";
+import type { Presentation } from "./types/presentation";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
-const SLIDE_WIDTH = 1920;
-const SLIDE_HEIGHT = 1080;
 
 interface CliOptions {
   inputPath: string;
@@ -29,8 +30,8 @@ interface CliOptions {
 function usage(): string {
   return [
     "usage:",
-    "  presentation-kit render <input.json> --out <output.pdf> [--html <output.html>]",
-    "  tsx src/cli.tsx <input.json> --out <output.pdf> [--html <output.html>]",
+    "  presentation-kit render <input.json> --out <output.pdf|output.pptx> [--html <output.html>]",
+    "  tsx src/cli.tsx <input.json> --out <output.pdf|output.pptx> [--html <output.html>]",
   ].join("\n");
 }
 
@@ -60,7 +61,7 @@ function parseArgs(argv: string[]): CliOptions {
   }
 
   if (!outputPath) {
-    throw new Error(`Missing --out <output.pdf>\n${usage()}`);
+    throw new Error(`Missing --out <output.pdf|output.pptx>\n${usage()}`);
   }
 
   return {
@@ -133,55 +134,6 @@ async function preparePresentationAssets(
   );
 
   return prepared;
-}
-
-function hasRenderableData(value: unknown): boolean {
-  if (value == null) {
-    return false;
-  }
-  if (Array.isArray(value)) {
-    return value.some(hasRenderableData);
-  }
-  if (typeof value === "object") {
-    return Object.values(value).some(hasRenderableData);
-  }
-  if (typeof value === "string") {
-    return value.trim().length > 0;
-  }
-  return true;
-}
-
-function cornersFor(presentation: Presentation): CornerLabels {
-  const clientName =
-    presentation.client?.company?.trim() ||
-    presentation.client?.name?.trim() ||
-    presentation.title;
-  return {
-    tl: "Imaginary Space",
-    tr: presentation.meeting_date ?? new Date().toISOString().slice(0, 10),
-    bl: clientName,
-    br: presentation.cycle_name ?? presentation.sprint_name ?? presentation.meeting_type ?? "Presentation",
-  };
-}
-
-/**
- * Build the small-caps ribbon shown on slides 2–6, e.g.
- * "LANDIBLE · CYCLE 21 · APR 30, 2026". Honours an explicit
- * `presentation.footer_label` and otherwise derives one from the client +
- * cycle + meeting date.
- */
-function footerLabelFor(presentation: Presentation): string {
-  const explicit = presentation.footer_label?.trim();
-  if (explicit) {
-    return explicit;
-  }
-  const company =
-    presentation.client?.company?.trim() ||
-    presentation.client?.name?.trim() ||
-    presentation.title;
-  const cycle = presentation.cycle_name ?? presentation.sprint_name;
-  const date = presentation.meeting_date;
-  return [company, cycle, date].filter(Boolean).join(" · ").toUpperCase();
 }
 
 function Deck({ presentation }: { presentation: Presentation }) {
@@ -312,6 +264,13 @@ async function renderPdf(htmlPath: string, outputPath: string): Promise<void> {
   }
 }
 
+function outputFormatFor(outputPath: string): "pdf" | "pptx" {
+  const ext = path.extname(outputPath).toLowerCase();
+  if (ext === ".pdf") return "pdf";
+  if (ext === ".pptx") return "pptx";
+  throw new Error(`Unsupported output extension "${ext}". Use .pdf or .pptx.`);
+}
+
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
   const presentation = await preparePresentationAssets(
@@ -319,13 +278,19 @@ async function main(): Promise<void> {
     options.inputPath,
   );
   const html = await buildHtml(presentation);
+  const format = outputFormatFor(options.outputPath);
   const htmlPath =
-    options.htmlPath ?? options.outputPath.replace(/\.pdf$/i, "") + ".html";
+    options.htmlPath ?? options.outputPath.replace(/\.(pdf|pptx)$/i, "") + ".html";
 
   await mkdir(path.dirname(options.outputPath), { recursive: true });
   await mkdir(path.dirname(htmlPath), { recursive: true });
   await writeFile(htmlPath, html, "utf8");
-  await renderPdf(htmlPath, options.outputPath);
+
+  if (format === "pdf") {
+    await renderPdf(htmlPath, options.outputPath);
+  } else {
+    await renderDeckToPptx(presentation, options.outputPath);
+  }
 
   console.log(`[presentation-kit] wrote ${options.outputPath}`);
   console.log(`[presentation-kit] wrote ${htmlPath}`);

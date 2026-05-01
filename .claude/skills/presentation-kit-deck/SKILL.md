@@ -2,7 +2,7 @@
 name: presentation-kit-deck
 description: >-
   Builds a client presentation with scripts/presentation-kit by pulling Linear,
-  IMS ops Supabase meetings and decisions, rendering the React deck to PDF, and
+  IMS ops Supabase meetings and decisions, rendering the React deck to PPTX, and
   uploading artifacts to Google Drive. Use for Landible tests, weekly client
   updates, roadmap readouts, decision reviews, or any routine that should turn
   live project data into a polished deck.
@@ -12,12 +12,12 @@ description: >-
 
 This skill is the complete instruction set for a stateless cloud routine that
 creates one client deck from live data. It reads from Linear and IMS ops
-Supabase, writes local JSON/PDF artifacts, then uploads to Drive.
+Supabase, writes local JSON/PPTX artifacts, then uploads to Drive.
 
 **What this routine does in one sentence:** discover the right client/project,
 pull recent decisions, meetings, and Linear work, compose a
 `Presentation` JSON view-model, render it through `scripts/presentation-kit`,
-and upload the PDF plus JSON source to Drive.
+and upload the PowerPoint deck plus JSON source to Drive.
 
 **Hard boundary:** no writes to Linear or Supabase. Google Drive upload is the
 only external write.
@@ -46,7 +46,7 @@ The routine needs MCP access to:
 1. **Supabase** — read-only SQL against IMS ops project `jcuymodyrjbzwmyjzwee`.
 2. **Linear** — read issues, projects, cycles, teams, comments.
 
-Drive upload does **not** use the Google Drive MCP connector because large PDF
+Drive upload does **not** use the Google Drive MCP connector because large deck
 uploads through base64 tool payloads are unreliable. Instead, Drive upload uses
 `scripts/drive-upload.mjs`, which streams bytes to the Google Drive API with a
 service account.
@@ -65,13 +65,19 @@ and the target parent folder must be shared with the service account email.
 Use these paths from repo root:
 
 - JSON source: `out/<client-slug>-<YYYY-MM-DD>.json`
-- PDF deck: `out/<client-slug>-<YYYY-MM-DD>.pdf`
-- HTML preview: generated automatically beside the PDF
+- PPTX deck: `out/<client-slug>-<YYYY-MM-DD>.pptx`
+- HTML preview: generated automatically beside the PPTX
+
+The final Drive deck artifact must be the native editable `.pptx`. Do not upload
+a PDF as the final client deck; only create PDFs as explicitly requested
+local/reference exports. Do not rasterize PDF/HTML into PowerPoint and do not
+write one-off PPTX builders under `out/`; the presentation-kit renderer already
+creates editable PowerPoint text, shapes, chart-like objects, lines, and images.
 
 Render command:
 
 ```bash
-./scripts/build-presentation.sh out/<client-slug>-<YYYY-MM-DD>.json out/<client-slug>-<YYYY-MM-DD>.pdf
+./scripts/build-presentation.sh out/<client-slug>-<YYYY-MM-DD>.json out/<client-slug>-<YYYY-MM-DD>.pptx
 ```
 
 ## Step 0 — Normalize run inputs
@@ -293,8 +299,8 @@ The helper combines that business context with deck JSON, calls FAL
 - `closing_data.closingImageUrl`
 - `closing_data.closingImagePrompt`
 
-Generated images are then inlined into the HTML/PDF during render, so the final
-PDF is self-contained.
+Generated images are then inlined into the HTML/PPTX during render, so the final
+PPTX is self-contained.
 
 If you need to inspect or override prompts, print them first:
 
@@ -328,17 +334,20 @@ do not block the deck.
 Run:
 
 ```bash
-./scripts/build-presentation.sh out/<client-slug>-<YYYY-MM-DD>.json out/<client-slug>-<YYYY-MM-DD>.pdf
+./scripts/build-presentation.sh out/<client-slug>-<YYYY-MM-DD>.json out/<client-slug>-<YYYY-MM-DD>.pptx
 ```
 
 If rendering fails, inspect the local error, fix the JSON shape or missing
 required fields, and retry once. If it still fails, report the failure and do
-not upload a broken artifact.
+not upload a broken artifact. Do not fall back to PDF-to-PPTX, HTML screenshots,
+or full-slide image exports because those are not editable client decks.
 
 ## Step 8 — Upload to Drive
 
-Never base64 encode PDF, HTML, or JSON artifacts for upload. Do not create
+Never base64 encode PPTX, HTML, or JSON artifacts for upload. Do not create
 `.b64` files and do not read encoded artifacts back into the model context.
+Upload the native editable PowerPoint file as the final deck artifact; do not
+substitute a PDF, screenshot deck, or image-only PPTX for Drive delivery.
 
 Resolve `drive_parent_folder` from the prompt or
 `GOOGLE_DRIVE_PRESENTATIONS_FOLDER_ID`. In that parent, create or reuse:
@@ -353,7 +362,7 @@ Use the service-account uploader from repo root:
 folder_json="$(node scripts/drive-upload.mjs ensure-folder --parent "$DRIVE_PARENT_FOLDER_ID" --name "<Client Name> - YYYY-MM-DD")"
 folder_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$folder_json")"
 
-node scripts/drive-upload.mjs upload --file "out/<client-slug>-<YYYY-MM-DD>.pdf" --parent "$folder_id" --mime "application/pdf"
+node scripts/drive-upload.mjs upload --file "out/<client-slug>-<YYYY-MM-DD>.pptx" --parent "$folder_id" --mime "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 node scripts/drive-upload.mjs upload --file "out/<client-slug>-<YYYY-MM-DD>.json" --parent "$folder_id" --mime "application/json"
 ```
 
@@ -362,7 +371,7 @@ for the final response.
 
 Upload:
 
-1. `out/<client-slug>-<YYYY-MM-DD>.pdf`
+1. `out/<client-slug>-<YYYY-MM-DD>.pptx`
 2. `out/<client-slug>-<YYYY-MM-DD>.json`
 3. optional `out/<client-slug>-<YYYY-MM-DD>.html` if useful for debugging
 
@@ -377,7 +386,7 @@ Run the presentation-kit-deck skill for client Landible.
 Lookback: 7 days.
 Drive parent folder: use GOOGLE_DRIVE_PRESENTATIONS_FOLDER_ID unless explicitly overridden.
 Connectors: Linear, Supabase (IMS ops jcuymodyrjbzwmyjzwee).
-Success criteria: PDF and JSON uploaded to Drive; final response includes links
+Success criteria: PPTX and JSON uploaded to Drive; final response includes links
 and a short changelog of data pulled vs gaps.
 ```
 
@@ -394,7 +403,7 @@ Expected first-run gaps to report, not guess around:
 
 ## Definition of done
 
-- `out/<client-slug>-<YYYY-MM-DD>.pdf` renders successfully.
-- PDF and JSON are uploaded to Drive under the dated client folder.
+- `out/<client-slug>-<YYYY-MM-DD>.pptx` renders successfully.
+- PPTX and JSON are uploaded to Drive under the dated client folder.
 - Final response includes Drive links and a concise data-gap changelog.
 - No Linear or Supabase writes were performed.
