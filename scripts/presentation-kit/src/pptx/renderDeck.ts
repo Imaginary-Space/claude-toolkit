@@ -42,8 +42,28 @@ function upper(value: unknown): string {
   return clean(value).toUpperCase();
 }
 
-function pptxColor(color: string): string {
-  return color.replace(/^#/, "").toUpperCase();
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function compactLength(value: unknown): number {
+  return clean(value).replace(/\s+/g, "").length;
+}
+
+function fontByLength(value: unknown, max: number, min: number, startChars: number, step = 2.4): number {
+  return clamp(max - Math.max(0, compactLength(value) - startChars) * step, min, max);
+}
+
+function titleFont(value: unknown, max: number, min: number, startChars = 16): number {
+  return fontByLength(value, max, min, startChars, 1.6);
+}
+
+function bodyFont(value: unknown, max: number, min: number, startChars = 90): number {
+  return fontByLength(value, max, min, startChars, 0.12);
+}
+
+function maxItems<T>(items: T[], count: number): T[] {
+  return items.slice(0, Math.max(count, 0));
 }
 
 function addText(slide: Slide, text: unknown, opts: TextOptions): void {
@@ -327,10 +347,30 @@ function renderNumbers(slide: Slide, pptx: Pptx, presentation: Presentation, foo
     const x = px(80) + (cardW + gap) * index;
     const y = px(360);
     const accent = clean(stat.value).startsWith("+");
+    const valueFont = fontByLength(stat.value, pt(88), pt(38), 3, 6);
+    const valueHeight = valueFont <= pt(48) ? px(76) : px(112);
     addLine(slide, pptx, x, y, cardW, 0, BRAND.foreground);
-    addText(slide, stat.value, { x, y: y + px(24), w: cardW, h: px(100), fontSize: pt(96), color: accent ? BRAND.accent : BRAND.foreground, bold: true, fit: "shrink" });
-    addText(slide, upper(stat.label), { x, y: y + px(140), w: cardW, h: px(34), fontSize: pt(13), color: BRAND.foreground, bold: true, fit: "shrink" });
-    addText(slide, stat.context, { x, y: y + px(184), w: cardW, h: px(56), fontSize: pt(14), color: BRAND.mutedText, fit: "shrink" });
+    addText(slide, stat.value, {
+      x,
+      y: y + px(24),
+      w: cardW,
+      h: valueHeight,
+      fontSize: valueFont,
+      color: accent ? BRAND.accent : BRAND.foreground,
+      bold: true,
+      fit: "shrink",
+    });
+    addText(slide, upper(stat.label), {
+      x,
+      y: y + px(150),
+      w: cardW,
+      h: px(34),
+      fontSize: fontByLength(stat.label, pt(13), pt(9), 18, 0.45),
+      color: BRAND.foreground,
+      bold: true,
+      fit: "shrink",
+    });
+    addText(slide, stat.context, { x, y: y + px(194), w: cardW, h: px(56), fontSize: bodyFont(stat.context, pt(14), pt(10), 42), color: BRAND.mutedText, fit: "shrink" });
   });
 
   const breakdown = Array.isArray(data.breakdown) ? data.breakdown : [];
@@ -366,9 +406,26 @@ function renderWorkstreams(slide: Slide, pptx: Pptx, presentation: Presentation,
     }
     addText(slide, upper(item.id), { x: x + px(28), y: y + px(28), w: cardW / 2, h: px(22), fontSize: pt(12), color: BRAND.mutedText, bold: true, fit: "shrink" });
     addText(slide, item.points, { x: x + cardW / 2, y: y + px(28), w: cardW / 2 - px(28), h: px(22), fontSize: pt(12), color: BRAND.mutedText, bold: true, align: "right", fit: "shrink" });
-    addText(slide, String(index + 1).padStart(2, "0"), { x: x + cardW - px(140), y: y + px(76), w: px(112), h: px(80), fontSize: pt(72), color: BRAND.borderLight, bold: true, align: "right", fit: "shrink" });
-    addText(slide, item.name, { x: x + px(28), y: y + px(150), w: Math.min(cardW - px(56), px(300)), h: px(150), fontSize: pt(44), bold: true, color: BRAND.foreground, fit: "shrink" });
-    addText(slide, item.impact, { x: x + px(28), y: y + px(320), w: cardW - px(56), h: px(138), fontSize: pt(20), color: BRAND.mutedText, fit: "shrink" });
+    addText(slide, String(index + 1).padStart(2, "0"), { x: x + cardW - px(132), y: y + px(72), w: px(104), h: px(76), fontSize: pt(64), color: BRAND.borderLight, bold: true, align: "right", fit: "shrink" });
+    addText(slide, item.name, {
+      x: x + px(28),
+      y: y + px(150),
+      w: cardW - px(56),
+      h: px(160),
+      fontSize: titleFont(item.name, pt(38), pt(21), 14),
+      bold: true,
+      color: BRAND.foreground,
+      fit: "shrink",
+    });
+    addText(slide, item.impact, {
+      x: x + px(28),
+      y: y + px(330),
+      w: cardW - px(56),
+      h: px(128),
+      fontSize: bodyFont(item.impact, pt(17), pt(10), 92),
+      color: BRAND.mutedText,
+      fit: "shrink",
+    });
     if (item.status) {
       const pillW = px(170);
       addRect(slide, pptx, { x: x + px(28), y: y + px(520), w: pillW, h: px(34) }, BRAND.foreground, BRAND.foreground);
@@ -397,20 +454,37 @@ function renderRecommendations(slide: Slide, pptx: Pptx, presentation: Presentat
       addRect(slide, pptx, { x: px(120), y: gridY + px(40), w: px(270), h: px(32) }, BRAND.accentWarm, BRAND.accentWarm);
       addText(slide, upper(lead.priority), { x: px(134), y: gridY + px(48), w: px(242), h: px(14), fontSize: pt(11), color: BRAND.accent, bold: true, align: "center", fit: "shrink" });
     }
-    addText(slide, lead.title, { x: px(120), y: gridY + px(108), w: px(560), h: px(180), fontSize: pt(72), color: BRAND.cream, bold: true, fit: "shrink" });
-    addText(slide, lead.rationale, { x: px(120), y: gridY + px(310), w: px(720), h: px(112), fontSize: pt(23), color: "D6D6D6", fit: "shrink" });
+    addText(slide, lead.title, {
+      x: px(120),
+      y: gridY + px(108),
+      w: px(720),
+      h: px(188),
+      fontSize: titleFont(lead.title, pt(64), pt(28), 14),
+      color: BRAND.cream,
+      bold: true,
+      fit: "shrink",
+    });
+    addText(slide, lead.rationale, {
+      x: px(120),
+      y: gridY + px(310),
+      w: px(720),
+      h: px(112),
+      fontSize: bodyFont(lead.rationale, pt(20), pt(11), 110),
+      color: "D6D6D6",
+      fit: "shrink",
+    });
     addLine(slide, pptx, px(120), gridY + px(466), px(720), 0, "444444");
     addText(slide, "EXPECTED OUTCOME", { x: px(120), y: gridY + px(492), w: px(320), h: px(20), fontSize: pt(12), color: BRAND.accent, bold: true, fit: "shrink" });
-    addText(slide, lead.impact, { x: px(120), y: gridY + px(522), w: px(760), h: px(54), fontSize: pt(21), color: BRAND.cream, fit: "shrink" });
+    addText(slide, lead.impact, { x: px(120), y: gridY + px(522), w: px(760), h: px(54), fontSize: bodyFont(lead.impact, pt(18), pt(11), 92), color: BRAND.cream, fit: "shrink" });
   }
   supporting.forEach((item, index) => {
     const y = gridY + index * px(178);
     addLine(slide, pptx, sideX, index === 0 ? y : y - px(1), px(772), 0, index === 0 ? BRAND.dark : BRAND.mutedBorder);
     addText(slide, String(index + 2).padStart(2, "0"), { x: sideX, y: y + px(28), w: px(76), h: px(42), fontSize: pt(34), color: BRAND.accent, bold: true, fit: "shrink" });
-    addText(slide, item.title, { x: sideX + px(102), y: y + px(26), w: px(420), h: px(48), fontSize: pt(30), bold: true, color: BRAND.foreground, fit: "shrink" });
+    addText(slide, item.title, { x: sideX + px(102), y: y + px(22), w: px(420), h: px(58), fontSize: titleFont(item.title, pt(26), pt(15), 18), bold: true, color: BRAND.foreground, fit: "shrink" });
     if (item.priority) addText(slide, upper(item.priority), { x: sideX + px(540), y: y + px(34), w: px(232), h: px(18), fontSize: pt(11), color: BRAND.accent, bold: true, align: "right", fit: "shrink" });
-    addText(slide, item.rationale, { x: sideX + px(102), y: y + px(82), w: px(640), h: px(54), fontSize: pt(18), color: BRAND.mutedText, fit: "shrink" });
-    addText(slide, item.impact, { x: sideX + px(102), y: y + px(140), w: px(640), h: px(34), fontSize: pt(15), bold: true, color: BRAND.foreground, fit: "shrink" });
+    addText(slide, item.rationale, { x: sideX + px(102), y: y + px(82), w: px(640), h: px(54), fontSize: bodyFont(item.rationale, pt(15), pt(9.5), 105), color: BRAND.mutedText, fit: "shrink" });
+    addText(slide, item.impact, { x: sideX + px(102), y: y + px(140), w: px(640), h: px(34), fontSize: bodyFont(item.impact, pt(13), pt(9), 95), bold: true, color: BRAND.foreground, fit: "shrink" });
   });
   if (data?.callout?.text) addCallout(slide, pptx, data.callout.label, data.callout.text);
 }
@@ -434,16 +508,16 @@ function renderAsks(slide: Slide, pptx: Pptx, presentation: Presentation, footer
     const rowsX = px(464);
     const rowsW = px(1376);
     addEllipse(slide, pptx, { x: px(80), y: sectionTop + px(13), w: px(18), h: px(18) }, dot, dot);
-    addText(slide, group.label, { x: px(116), y: sectionTop + px(6), w: px(320), h: px(28), fontSize: pt(12), bold: true, color: BRAND.foreground, fit: "shrink" });
-    addText(slide, group.summary, { x: px(116), y: sectionTop + px(42), w: px(320), h: px(54), fontSize: pt(13), color: BRAND.mutedText, fit: "shrink" });
+    addText(slide, group.label, { x: px(116), y: sectionTop + px(6), w: px(320), h: px(34), fontSize: fontByLength(group.label, pt(12), pt(8.5), 22, 0.35), bold: true, color: BRAND.foreground, fit: "shrink" });
+    addText(slide, group.summary, { x: px(116), y: sectionTop + px(44), w: px(320), h: px(54), fontSize: bodyFont(group.summary, pt(13), pt(9), 58), color: BRAND.mutedText, fit: "shrink" });
     addLine(slide, pptx, rowsX, sectionTop, rowsW, 0, BRAND.dark);
-    group.items.slice(0, rowCount).forEach((row, rowIndex) => {
+    maxItems(group.items, rowCount).forEach((row, rowIndex) => {
       const rowY = sectionTop + px(8) + rowIndex * px(50);
-      addText(slide, row.ask, { x: rowsX, y: rowY, w: px(470), h: px(22), fontSize: pt(18), bold: true, color: BRAND.foreground, fit: "shrink" });
-      addText(slide, row.detail, { x: rowsX, y: rowY + px(22), w: px(470), h: px(20), fontSize: pt(12), color: BRAND.mutedText, fit: "shrink" });
-      addText(slide, row.owner, { x: rowsX + px(930), y: rowY + px(10), w: px(220), h: px(24), fontSize: pt(14), bold: true, color: BRAND.foreground, fit: "shrink" });
+      addText(slide, row.ask, { x: rowsX, y: rowY, w: px(470), h: px(24), fontSize: titleFont(row.ask, pt(16), pt(10), 28), bold: true, color: BRAND.foreground, fit: "shrink" });
+      addText(slide, row.detail, { x: rowsX, y: rowY + px(24), w: px(470), h: px(20), fontSize: bodyFont(row.detail, pt(11), pt(8), 58), color: BRAND.mutedText, fit: "shrink" });
+      addText(slide, row.owner, { x: rowsX + px(930), y: rowY + px(10), w: px(220), h: px(24), fontSize: fontByLength(row.owner, pt(14), pt(9), 16, 0.45), bold: true, color: BRAND.foreground, fit: "shrink" });
       addRect(slide, pptx, { x: rowsX + px(1180), y: rowY + px(8), w: px(196), h: px(26) }, BRAND.foreground, BRAND.foreground);
-      addText(slide, upper(row.priority), { x: rowsX + px(1190), y: rowY + px(15), w: px(176), h: px(12), fontSize: pt(9), color: BRAND.cream, align: "center", fit: "shrink" });
+      addText(slide, upper(row.priority), { x: rowsX + px(1190), y: rowY + px(15), w: px(176), h: px(12), fontSize: fontByLength(row.priority, pt(9), pt(6.2), 12, 0.35), color: BRAND.cream, align: "center", fit: "shrink" });
       addLine(slide, pptx, rowsX, sectionTop + px(50) * (rowIndex + 1), rowsW, 0, BRAND.mutedBorder);
     });
     y += px(Math.max(70, rowCount * 50) + (index === groups.length - 1 ? 0 : 22));
