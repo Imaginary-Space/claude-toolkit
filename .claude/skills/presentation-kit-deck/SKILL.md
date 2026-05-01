@@ -45,6 +45,8 @@ The routine needs MCP access to:
 
 1. **Supabase** — read-only SQL against IMS ops project `jcuymodyrjbzwmyjzwee`.
 2. **Linear** — read issues, projects, cycles, teams, comments.
+3. **Slack** — read client-facing and internal project channels for recent
+   relationship context, decisions, asks, blockers, and sentiment.
 
 Drive upload does **not** use the Google Drive MCP connector because large deck
 uploads through base64 tool payloads are unreliable. Instead, Drive upload uses
@@ -178,7 +180,63 @@ Use Linear MCP read-only operations.
 4. Prefer exact filters. If exact filtering is unavailable, pull a wider set and
    curate; never invent issues.
 
-## Step 5 — Compose Presentation JSON
+## Step 5 — Pull Slack relationship context
+
+Use the Slack MCP connector when it is attached. The goal is not to dump chat
+into the deck; it is to understand the relationship, open loops, tone, and
+client-visible commitments so the recommendations and asks are current.
+
+Channel discovery:
+
+1. Search channel names for normalized `client_name`, project name, Linear team
+   key, and common slug variants:
+   - lowercase
+   - spaces/underscores removed
+   - spaces converted to hyphens
+   - client aliases from IMS ops, if available
+2. Prefer exact or near-exact client/project channels, especially shared/client
+   channels like `#client-name`, `#client-name-project`, `#proj-client-name`, or
+   account/team-specific variants.
+3. If multiple plausible channels exist, read small samples from each and choose
+   the one with the clearest recent client/project discussion. If still
+   ambiguous, use the safest exact match and add a data gap:
+   `Slack channel match ambiguous for <client_name>; used <channel>`.
+4. If no Slack connector or no plausible channel exists, continue and add a gap:
+   `Slack context unavailable for <client_name>`.
+
+Message pull:
+
+1. Pull recent channel messages for the same `lookback_days` window, plus a
+   small buffer (up to 14 days total) if the channel is quiet.
+2. If threads are available, expand only threads that mention blockers,
+   decisions, approvals, access, deliverables, timelines, client feedback, or
+   launch risk.
+3. Keep the read bounded: collect enough context to identify the relationship
+   state and open loops, not full chat history.
+4. Do not write to Slack from this routine.
+
+Extract into internal notes:
+
+- `relationship_pulse`: tone, confidence, urgency, and whether the client seems
+  aligned, confused, blocked, waiting, or escalating.
+- `client_asks`: questions or requests from the client that need answers.
+- `ims_asks`: requests IMS has made of the client that are still open.
+- `commitments`: dates, follow-ups, or deliverables promised in Slack.
+- `risks`: anything that could affect trust, timing, scope, approvals, access,
+  or launch readiness.
+- `useful_links`: Slack-shared links to Looms, docs, previews, builds, Drive,
+  Vercel, Linear, or other artifacts.
+
+Use Slack context carefully:
+
+- Let it inform `asks_data`, `recommendations_data`, and speaker/evidence notes.
+- Only put client-safe, non-sensitive summaries into visible slide text.
+- Do not quote private/internal Slack messages verbatim unless the message is
+  clearly client-facing and appropriate for the deck.
+- If Slack conflicts with Linear or Supabase, prefer the source of record for
+  status numbers, but mention the mismatch in data gaps or internal notes.
+
+## Step 6 — Compose Presentation JSON
 
 Write a JSON object matching
 `scripts/presentation-kit/src/types/presentation.ts`.
@@ -257,16 +315,18 @@ Mapping rules:
   Provide `title`, optional `subtitle`, and `recommendations[]` of
   `{ title, rationale, impact, priority }`. Use this for IMS guidance: tradeoff
   calls, sequencing advice, launch-readiness recommendations, and risk
-  reduction. Keep to 2–4 recommendations and make the first item the strongest
-  / highest-leverage one. Optional `callout` is
+  reduction. Incorporate Slack relationship context when it changes the client
+  success risk, sequencing, or communication plan. Keep to 2–4 recommendations
+  and make the first item the strongest / highest-leverage one. Optional
+  `callout` is
   `{ "label": "WHY NOW", "text": "..." }`.
 - `asks_data`: section eyebrow is auto `05 · ASKS`. Provide `title` and
   grouped `groups[]` such as urgent blockers, access needed, and upcoming
   input. Each group is `{ label, tone, summary, items }`, where `tone` is one of
   `urgent`, `access`, `upcoming`, or `default`, and each item is
   `{ ask, detail, owner, priority }`. Use flat `asks[]` only for legacy/simple
-  decks. Source from open decisions, blocked Linear issues, access requests, and
-  upcoming client dependencies.
+  decks. Source from open decisions, blocked Linear issues, Slack open loops,
+  access requests, and upcoming client dependencies.
 - `closing_data`: `heroText` (e.g. `LET'S BUILD`), `thankYou`, `teamLine`,
   and `dateLine`. The top-right image slot is optional but preferred; fill
   `closingImageUrl` and `closingImagePrompt` via Step 6.
@@ -274,7 +334,7 @@ Mapping rules:
 Keep slide text short. Prefer identifiers and evidence links in JSON fields
 over long paragraphs.
 
-## Step 6 — Generate cover / closing images
+## Step 7 — Generate cover / closing images
 
 If `FAL_AI_API_KEY` or `FAL_KEY` is available, use the bundled FAL image helper
 for the cover and closing top-right image slots before rendering:
@@ -329,7 +389,7 @@ client name and client-business context.
 If image generation is unavailable, leave the image fields blank and continue;
 do not block the deck.
 
-## Step 7 — Render
+## Step 8 — Render
 
 Run:
 
@@ -342,7 +402,7 @@ required fields, and retry once. If it still fails, report the failure and do
 not upload a broken artifact. Do not fall back to PDF-to-PPTX, HTML screenshots,
 or full-slide image exports because those are not editable client decks.
 
-## Step 8 — Upload to Drive
+## Step 9 — Upload to Drive
 
 Never base64 encode PPTX, HTML, or JSON artifacts for upload. Do not create
 `.b64` files and do not read encoded artifacts back into the model context.
