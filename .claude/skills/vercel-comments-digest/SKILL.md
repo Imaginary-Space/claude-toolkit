@@ -25,6 +25,8 @@ thread once with the Linear link.
   thread replies; do not call the Vercel API.
 - **Linear grouping:** one holding issue per resolved Linear team per ISO week,
   titled `Vercel Comments - Week of YYYY-MM-DD` where the date is Monday.
+- **Durable memory:** `vercel_feedback` is the per-thread source of truth;
+  `system_config` stores only compact run cursors and refresh intervals.
 
 ## Preflight: required connectors
 
@@ -48,6 +50,8 @@ Cloud runs can hit per-turn tool limits. Follow these rules literally:
 - Load project/client/team-member mapping rows from Supabase once per run.
 - Load existing `vercel_feedback` rows once per run, then update local memory
   after each upsert.
+- Fast-path already-tracked threads before reading Slack replies when the
+  existing row is complete and freshly synced.
 - Load Linear teams/projects once per run and cache them.
 - Do not create task/todo UI during a scheduled run.
 - Keep successful scheduled output terse.
@@ -71,49 +75,12 @@ Use only Supabase project `jcuymodyrjbzwmyjzwee`.
 ### `vercel_feedback` table
 
 This table is the idempotency surface. If it does not exist, fail before Slack
-or Linear writes. Required schema:
-
-```sql
-create table public.vercel_feedback (
-  id uuid not null default gen_random_uuid (),
-  project_id uuid null,
-  vercel_project_name text null,
-  deployment_url text null,
-  page_url text null,
-  comment text not null,
-  author_name text null,
-  author_email text null,
-  screenshot_url text null,
-  status text not null default 'open'::text,
-  priority text null,
-  external_id text null,
-  raw_payload jsonb null,
-  submitted_at timestamp with time zone not null default now(),
-  resolved_at timestamp with time zone null,
-  created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now(),
-  constraint vercel_feedback_pkey primary key (id),
-  constraint vercel_feedback_external_id_key unique (external_id),
-  constraint vercel_feedback_project_id_fkey foreign KEY (project_id) references projects (id) on delete set null
-) TABLESPACE pg_default;
-
-create index IF not exists idx_vercel_feedback_status
-  on public.vercel_feedback using btree (status) TABLESPACE pg_default;
-
-create index IF not exists idx_vercel_feedback_project
-  on public.vercel_feedback using btree (project_id) TABLESPACE pg_default;
-
-create index IF not exists idx_vercel_feedback_submitted
-  on public.vercel_feedback using btree (submitted_at desc) TABLESPACE pg_default;
-
-create trigger vercel_feedback_updated_at BEFORE
-update on vercel_feedback for EACH row
-execute FUNCTION update_updated_at ();
-```
-
-Use `external_id = vercelThreadId` for idempotency. Store routine metadata that
-does not have first-class columns, including Slack timestamps, Linear issue IDs,
-reply counts, stale flags, environment, and parse details, inside `raw_payload`.
+or Linear writes. Required columns: `id`, `project_id`,
+`vercel_project_name`, `deployment_url`, `page_url`, `comment`, `author_name`,
+`author_email`, `screenshot_url`, `status`, `priority`, unique `external_id`,
+`raw_payload`, `submitted_at`, `resolved_at`, `created_at`, `updated_at`.
+Use `external_id = vercelThreadId`; store Slack timestamps, Linear issue IDs,
+reply counts, stale flags, environment, and parse details in `raw_payload`.
 
 ---
 
@@ -127,7 +94,10 @@ select key, value from system_config where key in (
   'vercel_comments_digest.lookback_hours',
   'vercel_comments_digest.stale_threshold_hours',
   'vercel_comments_digest.linear_team_overrides',
-  'vercel_comments_digest.skip_envs'
+  'vercel_comments_digest.skip_envs',
+  'vercel_comments_digest.last_successful_parent_ts',
+  'vercel_comments_digest.cursor_grace_minutes',
+  'vercel_comments_digest.known_thread_refresh_hours'
 );
 ```
 
@@ -138,6 +108,9 @@ Parse into local variables:
 - `stale_threshold_hours` int, default `48`
 - `linear_team_overrides` object, default `{}`
 - `skip_envs` array of strings, default `[]`
+- `last_successful_parent_ts` string or null, default `null`
+- `cursor_grace_minutes` int, default `15`
+- `known_thread_refresh_hours` int, default `24`
 
 If `enabled` is false:
 
@@ -183,7 +156,11 @@ Keep the returned `id` as `$run_id`. Counters start at 0:
 
 Compute:
 
-- `oldest = now() - lookback_hours hours`, as a Slack timestamp-compatible value
+- `lookback_oldest = now() - lookback_hours hours`
+- If `last_successful_parent_ts` is present, compute
+  `cursor_oldest = last_successful_parent_ts - cursor_grace_minutes`.
+- `oldest = max(lookback_oldest, cursor_oldest)` when a cursor exists;
+  otherwise use `lookback_oldest`.
 
 Call:
 
@@ -208,7 +185,8 @@ Extract `vercel_slug = project`, `page_encoded`, `thread_id`, `env`, and
 `page_pretty`. Drop messages where `env` is in `skip_envs`. Sort remaining
 parents by ascending Slack `ts`. Set `items_checked = len(parents)`.
 
-If no parents remain, go to Step 8 and close the run as success.
+Track `max_seen_parent_ts` as the largest parsed parent Slack `ts`. If no
+parents remain, go to Step 8 and close the run as success.
 
 ## Step 3 - Load mappings and idempotency rows
 
@@ -251,15 +229,20 @@ triage may still be needed for paused work.
 Load existing thread rows once:
 
 ```sql
-select thread_id, linear_issue_id, linear_issue_url, linear_holding_epic_id,
-       slack_reply_ts, status
+select thread_id, parent_ts, linear_issue_id, linear_issue_url,
+       linear_holding_epic_id, slack_reply_ts, processing_status,
+       unmapped_reason, last_synced_at, status
 from (
   select
     external_id as thread_id,
+    raw_payload->>'parent_ts' as parent_ts,
     raw_payload->>'linear_issue_id' as linear_issue_id,
     raw_payload->>'linear_issue_url' as linear_issue_url,
     raw_payload->>'linear_holding_epic_id' as linear_holding_epic_id,
     raw_payload->>'slack_reply_ts' as slack_reply_ts,
+    raw_payload->>'processing_status' as processing_status,
+    raw_payload->>'unmapped_reason' as unmapped_reason,
+    raw_payload->>'last_synced_at' as last_synced_at,
     status
   from vercel_feedback
   where external_id = any($1)
@@ -290,6 +273,20 @@ For every parent in stable timestamp order, wrap the whole step in try/catch.
 On exception, increment `items_errored`, push a structured error into
 `error_details`, upsert the feedback row when possible with
 `raw_payload.processing_status = 'errored'`, and continue.
+
+Before Step 4a, apply the known-thread fast path. If the cached
+`vercel_feedback` row has all of the following, skip Slack thread reads, Linear
+writes, and Supabase upsert for that parent:
+
+- `linear_issue_id` is present.
+- `slack_reply_ts` is present.
+- `processing_status` is `tracked`, `updated`, or `skipped_known`.
+- `unmapped_reason` is absent.
+- `last_synced_at` is newer than `known_thread_refresh_hours`.
+
+Increment a local `items_known` counter and continue. Do not fast-path rows with
+missing Linear/Slack metadata, `processing_status = 'errored'`, an
+`unmapped_reason`, or stale `last_synced_at`; those need a normal refresh.
 
 ### Step 4a - Read Slack thread
 
@@ -419,6 +416,8 @@ Determine final run status:
 - `items_errored > 0 and items_new = 0 and items_queued = 0` -> `failed`
 
 Unmapped threads count as skipped, not errored, unless Supabase upsert fails.
+Known-thread fast paths count only in local `items_known`; they are not
+unmapped/skipped failures.
 
 ## Step 6 - Close the run log
 
@@ -437,23 +436,26 @@ where id = $run_id;
 ```
 
 Set `notes` to include `stale=<items_stale>` and `unmapped=<items_skipped>`
-when nonzero.
+when nonzero. Include `known=<items_known>` when the fast path skipped already
+tracked threads.
+
+If final status is `success` or `partial_success`, and `max_seen_parent_ts` is
+present, persist the cursor after closing the run log:
+
+```sql
+update system_config
+set value = to_jsonb($max_seen_parent_ts::text)
+where key = 'vercel_comments_digest.last_successful_parent_ts';
+```
 
 ## Step 7 - Failure alert
 
 Only on `status = 'failed'`. Do not alert on `partial_success`.
 
-If Slack user search is available:
-
-```text
-Slack:slack_search_users(query = "harry@imaginaryspace.ai")
-Slack:slack_send_message(
-  channel_id = "<harry_user_id>",
-  message = "Vercel comments digest failed. Run ID `<run_id>`. <items_errored> errors. Query: `select error_details from automation_runs where id = '<run_id>'`"
-)
-```
-
-If Slack user search is unavailable, skip the alert.
+If Slack user search is available, DM Harry:
+`Vercel comments digest failed. Run ID <run_id>. <items_errored> errors. Query:
+select error_details from automation_runs where id = '<run_id>'`. If Slack user
+search is unavailable, skip the alert.
 
 ## Step 8 - Output summary
 
