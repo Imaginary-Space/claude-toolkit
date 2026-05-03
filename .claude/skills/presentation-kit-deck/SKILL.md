@@ -2,22 +2,23 @@
 name: presentation-kit-deck
 description: >-
   Builds a client presentation with scripts/presentation-kit by pulling Linear,
-  IMS ops Supabase meetings and decisions, rendering the React deck to PPTX, and
-  uploading artifacts to Google Drive. Use for Landible tests, weekly client
-  updates, roadmap readouts, decision reviews, or any routine that should turn
-  live project data into a polished deck.
+  IMS ops Supabase meetings and decisions, rendering the deck as native Google
+  Slides, and uploading source artifacts to Google Drive. Use for Landible
+  tests, weekly client updates, roadmap readouts, decision reviews, or any
+  routine that should turn live project data into a polished deck.
 ---
 
 # Presentation-kit deck (standalone routine)
 
 This skill is the complete instruction set for a stateless cloud routine that
 creates one client deck from live data. It reads from Linear and IMS ops
-Supabase, writes local JSON/PPTX artifacts, then uploads to Drive.
+Supabase, writes local JSON/metadata artifacts, then creates a native Google
+Slides deck in Drive.
 
 **What this routine does in one sentence:** discover the right client/project,
 pull recent decisions, meetings, and Linear work, compose a
 `Presentation` JSON view-model, render it through `scripts/presentation-kit`,
-and upload the PowerPoint deck plus JSON source to Drive.
+and create a native Google Slides deck plus JSON source in Drive.
 
 **Hard boundary:** no writes to Linear or Supabase. Google Drive upload is the
 only external write.
@@ -48,9 +49,9 @@ The routine needs MCP access to:
 3. **Slack** — read client-facing and internal project channels for recent
    relationship context, decisions, asks, blockers, and sentiment.
 
-Drive upload does **not** use the Google Drive MCP connector because large deck
-uploads through base64 tool payloads are unreliable. Instead, Drive upload uses
-`scripts/drive-upload.mjs`, which streams bytes to the Google Drive API with a
+Google Slides/Drive writes do **not** use the Google Drive MCP connector because
+large deck payloads through base64 tool calls are unreliable. Instead,
+presentation creation and source uploads use the Google APIs directly with a
 service account.
 
 Required settings for Drive upload:
@@ -59,27 +60,28 @@ Required settings for Drive upload:
 - `GOOGLE_DRIVE_PRESENTATIONS_FOLDER_ID` — default parent folder ID, unless the
   prompt provides `drive_parent_folder`.
 
-The Drive API must be enabled for the service account's Google Cloud project,
-and the target parent folder must be shared with the service account email.
+The Drive API and Google Slides API must be enabled for the service account's
+Google Cloud project, and the target parent folder must be shared with the
+service account email.
 
 ## Local output contract
 
 Use these paths from repo root:
 
 - JSON source: `out/<client-slug>-<YYYY-MM-DD>.json`
-- PPTX deck: `out/<client-slug>-<YYYY-MM-DD>.pptx`
-- HTML preview: generated automatically beside the PPTX
+- Google Slides metadata: `out/<client-slug>-<YYYY-MM-DD>.slides.json`
+- HTML preview: generated automatically beside the metadata file
 
-The final Drive deck artifact must be the native editable `.pptx`. Do not upload
-a PDF as the final client deck; only create PDFs as explicitly requested
-local/reference exports. Do not rasterize PDF/HTML into PowerPoint and do not
-write one-off PPTX builders under `out/`; the presentation-kit renderer already
-creates editable PowerPoint text, shapes, chart-like objects, lines, and images.
+The final Drive deck artifact must be a native editable Google Slides
+presentation. Do not upload a PPTX or PDF as the final client deck. Do not
+rasterize PDF/HTML screenshots into Slides; the presentation-kit renderer
+creates editable native Slides text boxes, shapes, lines, chart-like objects,
+and images.
 
 Render command:
 
 ```bash
-./scripts/build-presentation.sh out/<client-slug>-<YYYY-MM-DD>.json out/<client-slug>-<YYYY-MM-DD>.pptx
+./scripts/build-presentation.sh out/<client-slug>-<YYYY-MM-DD>.json out/<client-slug>-<YYYY-MM-DD>.slides.json --parent "$folder_id"
 ```
 
 ## Step 0 — Normalize run inputs
@@ -359,8 +361,9 @@ The helper combines that business context with deck JSON, calls FAL
 - `closing_data.closingImageUrl`
 - `closing_data.closingImagePrompt`
 
-Generated images are then inlined into the HTML/PPTX during render, so the final
-PPTX is self-contained.
+Generated images are used by the HTML preview and by the native Google Slides
+renderer. Local image files are uploaded as Drive image assets so the Slides API
+can ingest them into editable slides.
 
 If you need to inspect or override prompts, print them first:
 
@@ -389,49 +392,45 @@ client name and client-business context.
 If image generation is unavailable, leave the image fields blank and continue;
 do not block the deck.
 
-## Step 8 — Render
+## Step 8 — Create the dated Drive folder and render
 
-Run:
-
-```bash
-./scripts/build-presentation.sh out/<client-slug>-<YYYY-MM-DD>.json out/<client-slug>-<YYYY-MM-DD>.pptx
-```
-
-If rendering fails, inspect the local error, fix the JSON shape or missing
-required fields, and retry once. If it still fails, report the failure and do
-not upload a broken artifact. Do not fall back to PDF-to-PPTX, HTML screenshots,
-or full-slide image exports because those are not editable client decks.
-
-## Step 9 — Upload to Drive
-
-Never base64 encode PPTX, HTML, or JSON artifacts for upload. Do not create
-`.b64` files and do not read encoded artifacts back into the model context.
-Upload the native editable PowerPoint file as the final deck artifact; do not
-substitute a PDF, screenshot deck, or image-only PPTX for Drive delivery.
-
-Resolve `drive_parent_folder` from the prompt or
-`GOOGLE_DRIVE_PRESENTATIONS_FOLDER_ID`. In that parent, create or reuse:
-
-```text
-<Client Name> - YYYY-MM-DD
-```
-
-Use the service-account uploader from repo root:
+Create or reuse the dated client folder first, then render the native Google
+Slides deck into that folder:
 
 ```bash
 folder_json="$(node scripts/drive-upload.mjs ensure-folder --parent "$DRIVE_PARENT_FOLDER_ID" --name "<Client Name> - YYYY-MM-DD")"
 folder_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$folder_json")"
 
-node scripts/drive-upload.mjs upload --file "out/<client-slug>-<YYYY-MM-DD>.pptx" --parent "$folder_id" --mime "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+./scripts/build-presentation.sh out/<client-slug>-<YYYY-MM-DD>.json out/<client-slug>-<YYYY-MM-DD>.slides.json \
+  --parent "$folder_id" \
+  --title "<Client Name> - YYYY-MM-DD Tech Sync"
+```
+
+If rendering fails, inspect the local error, fix the JSON shape or missing
+required fields, and retry once. If it still fails, report the failure and do
+not upload a broken artifact. Do not fall back to PPTX, PDF, HTML screenshots,
+or full-slide image exports because those are not native editable Google Slides
+decks.
+
+## Step 9 — Upload the JSON source
+
+Never base64 encode HTML or JSON artifacts for upload. Do not create `.b64`
+files and do not read encoded artifacts back into the model context. The native
+Google Slides deck was already created by the render step; upload the JSON
+source beside it:
+
+```bash
 node scripts/drive-upload.mjs upload --file "out/<client-slug>-<YYYY-MM-DD>.json" --parent "$folder_id" --mime "application/json"
 ```
 
-The uploader prints Drive file JSON including `webViewLink`; capture those links
-for the final response.
+The renderer writes `out/<client-slug>-<YYYY-MM-DD>.slides.json` with the Slides
+deck `id`, `name`, `webViewLink`, and `slideCount`. The JSON uploader prints
+Drive file JSON including `webViewLink`. Capture both links for the final
+response.
 
 Upload:
 
-1. `out/<client-slug>-<YYYY-MM-DD>.pptx`
+1. Native Google Slides deck created by the renderer
 2. `out/<client-slug>-<YYYY-MM-DD>.json`
 3. optional `out/<client-slug>-<YYYY-MM-DD>.html` if useful for debugging
 
@@ -446,13 +445,14 @@ Run the presentation-kit-deck skill for client Landible.
 Lookback: 7 days.
 Drive parent folder: use GOOGLE_DRIVE_PRESENTATIONS_FOLDER_ID unless explicitly overridden.
 Connectors: Linear, Supabase (IMS ops jcuymodyrjbzwmyjzwee).
-Success criteria: PPTX and JSON uploaded to Drive; final response includes links
+Success criteria: native Google Slides deck and JSON uploaded to Drive; final response includes links
 and a short changelog of data pulled vs gaps.
 ```
 
 Expected first-run gaps to report, not guess around:
 
 - Missing or invalid Landible Drive parent folder.
+- Drive API or Google Slides API unavailable for the service account project.
 - No exact Landible match in IMS ops client/project tables.
 - Decisions schema exists under an unexpected table name and needs schema
   discovery before querying.
@@ -463,7 +463,7 @@ Expected first-run gaps to report, not guess around:
 
 ## Definition of done
 
-- `out/<client-slug>-<YYYY-MM-DD>.pptx` renders successfully.
-- PPTX and JSON are uploaded to Drive under the dated client folder.
+- `out/<client-slug>-<YYYY-MM-DD>.slides.json` is written with a Google Slides link.
+- Native Google Slides deck and JSON source are in Drive under the dated client folder.
 - Final response includes Drive links and a concise data-gap changelog.
 - No Linear or Supabase writes were performed.

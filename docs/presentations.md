@@ -18,20 +18,20 @@ CLI examples (from repo root):
 Use [`scripts/presentation-kit`](../scripts/presentation-kit) when the deck needs
 the richer 1920x1080 slide system: branded cover/closing slides, velocity
 charts, sprint scope, timelines, recap columns, and demo/video slots. The kit
-renders from a typed JSON view-model (`Presentation`) to a native, editable PPTX
-plus a self-contained HTML preview:
+renders from a typed JSON view-model (`Presentation`) to a native, editable
+Google Slides deck plus a self-contained HTML preview:
 
 ```bash
-./scripts/build-presentation.sh out/landible-2026-04-30.json out/landible-2026-04-30.pptx
+./scripts/build-presentation.sh out/landible-2026-04-30.json out/landible-2026-04-30.slides.json --parent "$folder_id"
 ```
 
 The `presentation-kit-deck` skill is the routine entry point. It pulls Linear,
-IMS ops Supabase meetings/decisions, composes the JSON source, renders the PPTX,
-and uploads the PPTX deck plus JSON source to Drive.
+IMS ops Supabase meetings/decisions, composes the JSON source, creates the
+native Google Slides deck, and uploads the JSON source to Drive.
 
-The PPTX is generated directly with PowerPoint text, shape, line, chart-like, and
-image objects. Do not rasterize the HTML/PDF into a PPTX for final delivery; that
-creates slide images instead of an editable client deck.
+The Google Slides renderer creates native text boxes, shapes, lines, chart-like
+objects, and images. Do not rasterize the HTML/PDF into Slides for final
+delivery; that creates slide images instead of an editable client deck.
 
 Saved prompt template for the first Landible test:
 
@@ -40,7 +40,7 @@ Run the presentation-kit-deck skill for client Landible.
 Lookback: 7 days.
 Drive parent folder: <LANDIBLE_PRESENTATIONS_FOLDER_ID_OR_URL>.
 Connectors: Linear, Supabase (IMS ops jcuymodyrjbzwmyjzwee), Google Drive.
-Success criteria: PPTX and JSON uploaded to Drive; final response includes links
+Success criteria: native Google Slides deck and JSON uploaded to Drive; final response includes links
 and a short changelog of data pulled vs gaps.
 ```
 
@@ -61,10 +61,11 @@ client artifact.
 ## Alternatives (when to revisit)
 
 
-| Approach              | Pros                                                        | Cons                                                             |
-| --------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------- |
-| **Google Slides API** | Native collaborative editing, pixel-perfect brand templates | OAuth/service account complexity; heavier agent loop for layout  |
-| **Reveal.js / HTML**  | Great for engineering-only or embedded web                  | Client may expect a PPTX in Drive; print/export story is separate |
+| Approach             | Pros                                       | Cons                                             |
+| -------------------- | ------------------------------------------ | ------------------------------------------------ |
+| **Reveal.js / HTML** | Great for engineering-only or embedded web | Client collaboration/editing story is separate   |
+| **PPTX export**      | Useful for offline PowerPoint handoff      | Google Slides import can shift layout and fonts  |
 
 
-Stick with **Marp / presentation-kit → PPTX** until you need live co-editing in Slides or a hosted HTML deck as the primary artifact.
+Use **presentation-kit → native Google Slides** for rich client decks where the
+Drive artifact is the source of truth.

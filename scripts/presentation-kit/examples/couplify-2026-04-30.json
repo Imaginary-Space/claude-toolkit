@@ -1,0 +1,240 @@
+{
+  "id": "couplify-2026-04-30",
+  "title": "Couplify Week 6 Enhancement Sync",
+  "project_id": "couplify",
+  "linear_cycle_id": null,
+  "sprint_name": null,
+  "meeting_date": "2026-04-30",
+  "meeting_type": "Tech Sync",
+  "cycle_name": "Week 6 - Enhancement",
+  "footer_label": "COUPLIFY · WEEK 6 · APR 30, 2026",
+  "cover_data": {
+    "heroText": "COUPLIFY",
+    "team": "IMAGINARY SPACE x COUPLIFY",
+    "date": "APR 30, 2026",
+    "cycle": "WEEK 6 · ENHANCEMENT · LAUNCH RUNWAY"
+  },
+  "timeline_data": {
+    "title": "Launch runway is in sight",
+    "dates": ["Now", "Next", "Then", "Launch"],
+    "todayColumn": 0,
+    "sections": [
+      {
+        "label": "Phase 2 - Enhancement",
+        "tasks": [
+          {
+            "name": "Design",
+            "cells": ["ongoing", "future", "empty", "empty"]
+          },
+          {
+            "name": "Build",
+            "cells": ["done", "ongoing", "future", "empty"]
+          },
+          {
+            "name": "QA & client review",
+            "cells": ["done", "ongoing", "future", "empty"]
+          },
+          {
+            "name": "Store submission",
+            "cells": ["empty", "empty", "ongoing", "future"]
+          }
+        ]
+      }
+    ],
+    "callout": {
+      "label": "ON PACE",
+      "text": "Two refinement weeks open up once design freezes Friday and groups clear client review."
+    }
+  },
+  "numbers_data": {
+    "title": "Week 6 by the numbers",
+    "stats": [
+      {
+        "value": "18 / 35",
+        "label": "Issues complete",
+        "context": "Done or in client review"
+      },
+      {
+        "value": "27 / 35",
+        "label": "Out of dev hands",
+        "context": "Including QA + client review"
+      },
+      {
+        "value": "3",
+        "label": "Sync meetings",
+        "context": "Average engagement 91 / 100"
+      },
+      {
+        "value": "4",
+        "label": "Decisions locked",
+        "context": "Brand, pricing, payments, AI bio"
+      }
+    ],
+    "breakdownTitle": "Cycle scope - 77 pt",
+    "breakdown": [
+      {
+        "label": "Completed",
+        "value": "40 pt",
+        "widthPct": 52,
+        "variant": "dark"
+      },
+      {
+        "label": "QA / review",
+        "value": "14 pt",
+        "widthPct": 18,
+        "variant": "accent"
+      },
+      {
+        "label": "In progress",
+        "value": "12 pt",
+        "widthPct": 16,
+        "variant": "outline"
+      },
+      {
+        "label": "Unestimated parents",
+        "value": "11 pt",
+        "widthPct": 14,
+        "variant": "outline"
+      }
+    ]
+  },
+  "workstreams_data": {
+    "title": "Three workstreams in flight",
+    "workstreams": [
+      {
+        "id": "COU-147",
+        "name": "Groups & social discovery",
+        "impact": "Group creation, invites, location-based discovery, and admin approvals are moving through client review.",
+        "status": "Client review",
+        "points": "22 pt"
+      },
+      {
+        "id": "COU-83",
+        "name": "Messaging & media",
+        "impact": "Real-time messaging, gallery uploads, and profile video with tier limits cleared internal QA this week.",
+        "status": "QA",
+        "points": "14 pt"
+      },
+      {
+        "id": "COU-85",
+        "name": "Admin & launch readiness",
+        "impact": "Admin moderation, notifications, account suspend, and regression sweep are lined up ahead of store submission.",
+        "status": "In progress",
+        "points": "11 pt"
+      },
+      {
+        "id": "COU-58",
+        "name": "Stripe subscription",
+        "impact": "Subscription wiring is in place but held behind a feature flag pending Jay's pricing and premium gating call.",
+        "status": "Flagged off",
+        "points": "5 pt"
+      }
+    ],
+    "callout": {
+      "label": "TARGET",
+      "text": "Groups and messaging through client review by Friday, design freeze same day."
+    }
+  },
+  "recommendations_data": {
+    "title": "Our recommendations",
+    "recommendations": [
+      {
+        "title": "Lock the design freeze this week",
+        "rationale": "Kabir is finishing the landing page and group view by Friday; one final pass lets design hand off cleanly to dev.",
+        "impact": "Unblocks Qasim's UI implementation and opens two clean refinement weeks before launch.",
+        "priority": "Next best move"
+      },
+      {
+        "title": "Start Apple Developer and store submission prep now",
+        "rationale": "External native testing and App Store upload are still blocked by account access and signing credentials.",
+        "impact": "Turns submission week into a checklist instead of a credentials scramble.",
+        "priority": "Launch readiness"
+      },
+      {
+        "title": "Keep client feedback inside Vercel inline comments",
+        "rationale": "Centralizing review comments keeps UI feedback tied to the exact screen and avoids Slack drift.",
+        "impact": "Shortens the review loop and protects the refinement window.",
+        "priority": "Process"
+      },
+      {
+        "title": "Hold Stripe and AI-assisted bio behind flags",
+        "rationale": "Both features are close, but pricing and AI bio direction still need final client decisions.",
+        "impact": "Keeps the launch build stable while preserving a fast path to enable each feature.",
+        "priority": "Risk reduction"
+      }
+    ],
+    "callout": {
+      "label": "WHY NOW",
+      "text": "Week 6 is the last enhancement cycle; the next two weeks are refinement and store submission."
+    }
+  },
+  "asks_data": {
+    "title": "What we need from Couplify",
+    "groups": [
+      {
+        "label": "Urgent - blocking this week",
+        "tone": "urgent",
+        "summary": "Hand-offs that hold up landing page polish and store submission.",
+        "items": [
+          {
+            "ask": "Final website copy",
+            "detail": "Jay to share finalized landing-page content so Kabir can finish the redesign matching the app.",
+            "owner": "Jay",
+            "priority": "Blocking"
+          },
+          {
+            "ask": "Apple Developer account access",
+            "detail": "Required to publish iOS builds to TestFlight and the App Store; currently blocking external native testing.",
+            "owner": "Thomas / Couplify infra",
+            "priority": "Blocking"
+          }
+        ]
+      },
+      {
+        "label": "Access - keep dev unblocked",
+        "tone": "access",
+        "summary": "Existing Couplify-licensed services we should reuse instead of re-procuring.",
+        "items": [
+          {
+            "ask": "Third-party service keys",
+            "detail": "Twilio, Amazon SES, Firebase, Persona, and Phenometrix keys for production handoff.",
+            "owner": "Thomas",
+            "priority": "Access"
+          },
+          {
+            "ask": "OpenAI API key from Scott",
+            "detail": "Needed for the automated about-me feature carry-over from the previous codebase.",
+            "owner": "Scott",
+            "priority": "Access"
+          }
+        ]
+      },
+      {
+        "label": "Upcoming - decisions we need soon",
+        "tone": "upcoming",
+        "summary": "Product calls that gate scope before the refinement window opens.",
+        "items": [
+          {
+            "ask": "AI-assisted bio scope",
+            "detail": "Decide whether to port Sri's existing automated-about-me flow or build a new version this cycle.",
+            "owner": "Jay",
+            "priority": "Decision"
+          }
+        ]
+      }
+    ]
+  },
+  "closing_data": {
+    "heroText": "LET'S BUILD",
+    "thankYou": "Thanks Couplify team - momentum is real heading into refinement.",
+    "teamLine": "IMAGINARY SPACE x COUPLIFY",
+    "dateLine": "WEEK 6 · APR 30, 2026"
+  },
+  "created_at": "2026-04-30T12:00:00.000Z",
+  "client": {
+    "id": "couplify",
+    "name": "Couplify",
+    "company": "Couplify",
+    "photo_url": null
+  }
+}

@@ -16,6 +16,12 @@ import {
   WorkstreamsSlide,
 } from "./index";
 import { SLIDE_HEIGHT, SLIDE_WIDTH } from "./layout";
+import {
+  getGoogleAccessToken,
+  parseServiceAccount,
+  readGoogleSettingsEnv,
+  renderDeckToGoogleSlides,
+} from "./googleSlides/renderDeck";
 import { renderDeckToPptx } from "./pptx/renderDeck";
 import type { Presentation } from "./types/presentation";
 
@@ -25,13 +31,16 @@ interface CliOptions {
   inputPath: string;
   outputPath: string;
   htmlPath?: string;
+  slides: boolean;
+  parentId?: string;
+  title?: string;
 }
 
 function usage(): string {
   return [
     "usage:",
-    "  presentation-kit render <input.json> --out <output.pdf|output.pptx> [--html <output.html>]",
-    "  tsx src/cli.tsx <input.json> --out <output.pdf|output.pptx> [--html <output.html>]",
+    "  presentation-kit render <input.json> --slides --parent <folder-id> --out <metadata.json> [--html <output.html>] [--title <deck-name>]",
+    "  tsx src/cli.tsx <input.json> --slides --parent <folder-id> --out <metadata.json> [--html <output.html>] [--title <deck-name>]",
   ].join("\n");
 }
 
@@ -48,6 +57,9 @@ function parseArgs(argv: string[]): CliOptions {
 
   let outputPath = "";
   let htmlPath: string | undefined;
+  let slides = false;
+  let parentId: string | undefined;
+  let title: string | undefined;
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -55,19 +67,28 @@ function parseArgs(argv: string[]): CliOptions {
       outputPath = args[++i] ?? "";
     } else if (arg === "--html") {
       htmlPath = args[++i];
+    } else if (arg === "--slides") {
+      slides = true;
+    } else if (arg === "--parent") {
+      parentId = args[++i];
+    } else if (arg === "--title") {
+      title = args[++i];
     } else {
       throw new Error(`Unknown argument: ${arg}\n${usage()}`);
     }
   }
 
   if (!outputPath) {
-    throw new Error(`Missing --out <output.pdf|output.pptx>\n${usage()}`);
+    throw new Error(`Missing --out <metadata.json>\n${usage()}`);
   }
 
   return {
     inputPath: path.resolve(inputPath),
     outputPath: path.resolve(outputPath),
     htmlPath: htmlPath ? path.resolve(htmlPath) : undefined,
+    slides,
+    parentId,
+    title,
   };
 }
 
@@ -273,26 +294,41 @@ function outputFormatFor(outputPath: string): "pdf" | "pptx" {
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
-  const presentation = await preparePresentationAssets(
-    await readPresentation(options.inputPath),
-    options.inputPath,
-  );
-  const html = await buildHtml(presentation);
-  const format = outputFormatFor(options.outputPath);
-  const htmlPath =
-    options.htmlPath ?? options.outputPath.replace(/\.(pdf|pptx)$/i, "") + ".html";
+  const presentation = await readPresentation(options.inputPath);
+  const presentationForHtml = await preparePresentationAssets(presentation, options.inputPath);
+  const html = await buildHtml(presentationForHtml);
+  const htmlPath = options.htmlPath ?? options.outputPath.replace(/\.[^.]+$/i, "") + ".html";
 
   await mkdir(path.dirname(options.outputPath), { recursive: true });
   await mkdir(path.dirname(htmlPath), { recursive: true });
   await writeFile(htmlPath, html, "utf8");
 
-  if (format === "pdf") {
-    await renderPdf(htmlPath, options.outputPath);
+  if (options.slides) {
+    const env = await readGoogleSettingsEnv();
+    const parentId = options.parentId ?? env.GOOGLE_DRIVE_PRESENTATIONS_FOLDER_ID;
+    if (!parentId) {
+      throw new Error("Missing --parent <folder-id> or GOOGLE_DRIVE_PRESENTATIONS_FOLDER_ID");
+    }
+    const serviceAccount = parseServiceAccount(
+      env.GOOGLE_SERVICE_ACCOUNT_JSON_B64 || env.GOOGLE_SERVICE_ACCOUNT_JSON,
+    );
+    const token = await getGoogleAccessToken(serviceAccount);
+    const result = await renderDeckToGoogleSlides(presentation, token, {
+      parentId,
+      title: options.title ?? presentation.title,
+    });
+    await writeFile(options.outputPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+    console.log(`[presentation-kit] wrote native Google Slides deck ${result.webViewLink}`);
   } else {
-    await renderDeckToPptx(presentation, options.outputPath);
+    const format = outputFormatFor(options.outputPath);
+    if (format === "pdf") {
+      await renderPdf(htmlPath, options.outputPath);
+    } else {
+      await renderDeckToPptx(presentationForHtml, options.outputPath);
+    }
+    console.log(`[presentation-kit] wrote ${options.outputPath}`);
   }
 
-  console.log(`[presentation-kit] wrote ${options.outputPath}`);
   console.log(`[presentation-kit] wrote ${htmlPath}`);
 }
 

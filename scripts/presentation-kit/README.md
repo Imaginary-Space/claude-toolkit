@@ -314,19 +314,19 @@ node scripts/presentation-images.mjs generate out/client-2026-04-30.json \
 
 # 3. Alternative: generate images elsewhere, then attach returned local paths or
 # URLs. Local files are copied beside the JSON into out/client-2026-04-30-assets/
-# and are inlined into the PPTX at render time.
+# and are uploaded as Drive image assets for native Slides render time.
 node scripts/presentation-images.mjs attach out/client-2026-04-30.json \
   --cover /path/to/generated-cover.png \
   --closing /path/to/generated-closing.png
 
 # 4. Render normally.
-./scripts/build-presentation.sh out/client-2026-04-30.json out/client-2026-04-30.pptx
+./scripts/build-presentation.sh out/client-2026-04-30.json out/client-2026-04-30.slides.json --parent "$folder_id"
 ```
 
-The PPTX path is PowerPoint-native: visible text is emitted as editable text
-boxes, layout elements are emitted as shapes/lines, and generated art is inserted
-as image objects. The HTML file written beside it is a preview/debug artifact,
-not the source for a screenshot-based PPTX conversion.
+The Google Slides path is native: visible text is emitted as editable text boxes,
+layout elements are emitted as shapes/lines, and generated art is inserted as
+image objects. The HTML file written beside it is a preview/debug artifact, not
+the source for a screenshot-based Slides conversion.
 
 In app/editor workflows, `CoverSlide` and `ClosingSlide` also accept an
 `imageLoader` prop. Provide it to enable the inline prompt bar that lets users

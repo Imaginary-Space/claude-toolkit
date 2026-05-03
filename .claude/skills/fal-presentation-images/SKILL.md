@@ -9,7 +9,7 @@ description: >-
 # FAL presentation images
 
 Use this skill after a `scripts/presentation-kit` deck JSON exists and before
-rendering the PPTX.
+rendering the native Google Slides deck.
 
 ## Requirements
 
@@ -50,7 +50,7 @@ What it does:
 Then render normally:
 
 ```bash
-./scripts/build-presentation.sh out/<client-slug>-<YYYY-MM-DD>.json out/<client-slug>-<YYYY-MM-DD>.pptx
+./scripts/build-presentation.sh out/<client-slug>-<YYYY-MM-DD>.json out/<client-slug>-<YYYY-MM-DD>.slides.json --parent "$folder_id"
 ```
 
 ## Useful options
